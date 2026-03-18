@@ -12,47 +12,46 @@ Recommended structure:
 # Hotspot Insight: <file title>
 
 - Source file: `<relative/path>`
+- File role: `<role>`
 - Trigger reasons: `<1-3 summary bullets>`
 - Score: `<score>`
 - Entrypoint: `<entrypoint>`
 
-<Short lead-in paragraph explaining what to inspect first>
+<Short lead-in paragraph explaining why this role uses this reading order>
 
-## Architecture Pack
+## Recommended Reading Order
 
-### Architecture Context
-Pre-chart note: explain what question this chart answers.
-![Architecture Context](../../charts/<slug>-architecture-context.svg)
+- 1. `<diagram 1>`
+- 2. `<diagram 2>`
+- 3. `<diagram 3>`
 
-Post-chart note: call out the roles, boundaries, and relationships to verify.
+## Top Three Diagrams
 
-### Architecture Modules
-Pre-chart note: explain how the module split helps clarify responsibilities.
-![Architecture Modules](../../charts/<slug>-architecture-modules.svg)
+### Sequence
+Pre-chart note: explain which runtime collaboration to focus on.
+![Sequence](../../charts/<slug>-sequence.svg)
 
-Post-chart note: call out which boundaries must stay clean.
+Post-chart note: explain who triggers, who responds, and where timing risks sit.
 
-### Architecture Dependencies
-Pre-chart note: explain why dependency coordination deserves its own view.
-![Architecture Dependencies](../../charts/<slug>-architecture-dependencies.svg)
+### Boundary Context
+Pre-chart note: explain which local contracts or dependencies matter first.
+![Boundary Context](../../charts/<slug>-boundary-context.svg)
 
-Post-chart note: explain which collaborators are critical.
+Post-chart note: call out the interfaces, boundaries, and collaborators to verify.
 
-## Activity
+### Domain Structure
+Pre-chart note: explain which local concepts and relationships matter.
+![Domain Structure](../../charts/<slug>-domain-structure.svg)
 
-### Main Activity
+Post-chart note: explain which responsibilities or invariants must stay clean.
+
+## Supplemental Diagrams
+
+### Activity
 Pre-chart note: explain how to read the main path.
 ![Activity](../../charts/<slug>-activity.svg)
 
 Post-chart note: call out key inputs, conditions, and outputs.
-
-## Sequence
-
-### Main Sequence
-Pre-chart note: explain which collaboration timing to focus on.
-![Sequence](../../charts/<slug>-sequence.svg)
-
-Post-chart note: explain who triggers, who responds, and where timing risks sit.
 
 <Short closing paragraph reminding the reader to verify real business semantics in source>
 ```
@@ -61,6 +60,6 @@ Writing rules:
 
 - Keep the page image-first.
 - Keep explanatory text close to the chart it explains.
-- Prefer the three architecture charts before flow-oriented diagrams.
+- Start from the role-based top three, not from an architecture pack.
 - Keep chart filenames stable so repeat generation updates the same assets.
 - Do not bury charts under long narrative sections.

@@ -3,6 +3,7 @@
 ## Default Strategy
 
 `workflow-viz` does not bundle a PlantUML jar.
+
 Use `python scripts/workflow_viz.py doctor --repo-root <repo>` to validate the rendering runtime before generating docs.
 
 Default generated artifacts live under:
@@ -10,6 +11,15 @@ Default generated artifacts live under:
 - `docs/workflow-viz/insights/<group>/analysis.md` or `docs/workflow-viz/insights/<group>/<file>.md`
 - `docs/workflow-viz/code`
 - `docs/workflow-viz/charts`
+
+The generator now recommends semantic diagram keys such as:
+
+- `sequence`
+- `activity`
+- `domain-structure`
+- `boundary-context`
+- `state`
+- `data-flow`
 
 Each generated `.puml` injects this theme by default:
 
