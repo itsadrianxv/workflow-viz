@@ -39,7 +39,6 @@
 - PlantUML 源码
 - 渲染后的 SVG 图
 - 以图片为主的 Markdown 洞察文档
-- 总览索引页
 
 默认产物目录：
 
@@ -50,163 +49,102 @@ docs/workflow-viz/code/
 docs/workflow-viz/charts/
 ```
 
-- 鍗曟枃浠舵壒娆″彧鐢熸垚 `analysis.md`
-- 澶氭枃浠舵壒娆′細鍏堟寜鐜板満鍒嗘瀽鍐冲畾鍒嗙粍锛屽啀鍦ㄦ瘡涓瓙鐩綍涓轰笉鍚屾枃浠剁敓鎴愬悇鑷?Markdown
-- 涓嶅啀鐢熸垚 `index.md` 鎴栧叾浠栧璇诲瀷 Markdown
+## 在 Claude Code 中使用
 
-## 这个 skill 的特点
+这个仓库已经带了 Claude Code plugin 和 hook：
 
-### 1. 不是“把代码画出来”，而是“挑值得画的代码”
+- plugin 清单在 `.claude-plugin/plugin.json`
+- marketplace 清单在 `.claude-plugin/marketplace.json`
+- hook 配置在 `hooks/hooks.json`
+- Windows 入口脚本在 `hooks/run-hook.cmd`
 
-很多可视化工具的问题在于：只要给代码，就开始画。
+最推荐的用法，是把仓库当作本地 marketplace 安装：
 
-`workflow-viz` 更关心的是：
+```text
+/plugin marketplace add <workflow-viz 仓库根目录>
+/plugin install workflow-viz@hungyuk/workflow-viz-dev
+```
 
-- 这段代码是不是高理解成本
-- 它难在结构、协作、异步，还是状态迁移
-- 该补哪几张图，才真正有帮助
+如果你只是想本地调试或临时试用，也可以直接在仓库根目录启动：
 
-### 2. 触发依据不靠代码行数
+```bash
+claude --plugin-dir .
+```
 
-它默认使用静态启发式来评估理解成本，而不是简单地看文件长短。
+安装后建议补两项运行条件：
 
-重点考虑：
+- Claude Code 版本至少为 `1.0.33`
+- 在 Claude 的运行环境里可以找到 `bash` 和 `python3`
 
-- 圈复杂度
-- 嵌套深度与分支密度
-- 异常 / 重试 / 降级路径
-- 跨模块协作和调用扇出
-- 异步 / 并发模式
-- 状态迁移
-- 编排型命名特征
+当前 hook 会在 `Write` / `Edit` 后通过 `hooks/run-hook.cmd` 调用 `hooks/post-tool-complexity-check`。它只分析刚修改的代码文件；当理解成本评分达到 60 分以上时，会向 Claude 注入额外上下文，提醒它考虑使用 `workflow-viz`。它不会自动改源码，也不会未经确认就直接生成文档。
 
-这让它更适合处理那些“行数不大，但真的很难懂”的 AI 生成代码。
+插件更新后，运行 `/reload-plugins` 或直接重启 Claude Code。
 
-### 3. 三层模型更适合 agent 使用
+在 Claude Code 里可以直接这样提：
 
-`workflow-viz` 不是一上来就扫全仓。
+- “用 workflow-viz 扫描这个仓库里最值得可视化的热点文件。”
+- “对 `src/foo.py` 运行 workflow-viz，并把结果生成到 `docs/workflow-viz`。”
+- “先 scan，再决定要不要 generate。”
 
-它把决策拆成三层：
+想进一步自定义 plugin / hook 配置，可以参考 Claude Code 官方文档：
 
-- 第 1 层：会话级触发信号
-- 第 2 层：仓库级候选筛选
-- 第 3 层：文件级理解成本评分
+- [Plugins](https://docs.claude.com/en/docs/claude-code/plugins)
+- [Hooks](https://docs.claude.com/en/docs/claude-code/hooks)
 
-这能让 agent 在真实协作里更克制、更精准，也更省上下文。
+## 在 Codex 中使用
 
-### 4. 架构优先，而不是只画流程
+这个项目本质上也是一个 Codex skill。最简单的接入方式，是把整个仓库放到 Codex 的 skill 目录里，并保留 `SKILL.md`、`references/`、`scripts/` 的相对路径关系。
 
-当前版本默认优先生成一组架构图：
+Windows 上常见位置是：
 
-- `architecture-context`
-- `architecture-modules`
-- `architecture-dependencies`
+```powershell
+$target = "$env:USERPROFILE\\.codex\\skills\\workflow-viz"
+```
 
-然后再补：
+把仓库放好后重启 Codex。之后只要在对话里明确提到 `workflow-viz`，或者直接描述“扫描热点”“生成架构优先文档”这类任务，Codex 就能按 `SKILL.md` 中的规则调用这个项目。
 
-- `activity`
-- `sequence`
-- `branch-decision`
-- `state`
-- `async-concurrency`
-- `data-flow`
+如果你的 Codex 版本使用 `~/.agents/skills` 做发现目录，也可以把当前仓库做一个软链接或目录联接到 `~/.agents/skills/workflow-viz`。
 
-这意味着它不是只告诉你“代码怎么跑”，而是先帮助你理解“它在系统里是什么、和谁协作、职责怎么拆”。
+在 Codex 里常见的用法是：
 
-### 5. 图片优先的文档输出
+- “扫描这个仓库里理解成本最高的文件。”
+- “为这个 orchestrator / workflow 文件生成 architecture-first 的可视化文档。”
+- “先用 workflow-viz 判断值不值得画，再决定是否生成。”
 
-生成后的 Markdown 文档不是大段解释文字，而是以图为主、图前图后配少量说明的“洞察页”。
+需要注意的是：Codex 主要使用这个仓库里的 `SKILL.md` 和 Python 脚本，不会自动读取 `.claude-plugin` 下面的 Claude Code hook。换句话说，Claude 的 `PostToolUse` 提示增强是 Claude 专用能力，Codex 侧默认还是走显式 skill 调用。
 
-这类文档更适合：
+## 最小命令流
 
-- review
-- onboarding
-- AI 生成代码的二次理解
-- 后续维护
-
-### 6. 中文关键词，专属名词保留代码命名
-
-图里的通用关键词默认用中文表达，但类名、方法名、函数名、文件名等专属名词保留代码命名，不做翻译或风格改写。
-
-### 7. 默认适配暗色环境
-
-当前 SVG 默认按暗色环境查看处理，前景文字和线条会统一转成白色，避免插入深色文档后与背景混在一起。
-
-## 快速开始
-
-### 1. 先检查渲染环境
+无论你从 Claude Code 还是 Codex 进入，底层调用的都是同一个 CLI：
 
 ```bash
 python scripts/workflow_viz.py doctor --repo-root <repo>
-```
-
-### 2. 先扫描热点
-
-```bash
 python scripts/workflow_viz.py scan --repo-root <repo>
+python scripts/workflow_viz.py generate --repo-root <repo> --render
 ```
 
 只看某个文件时：
 
 ```bash
 python scripts/workflow_viz.py scan --repo-root <repo> --paths path/to/file.py
+python scripts/workflow_viz.py generate --repo-root <repo> --paths path/to/file.py --render
 ```
 
-### 3. 生成文档
-
-```bash
-python scripts/workflow_viz.py generate --repo-root <repo> --render
-```
-
-如果你想指定 PlantUML 主题：
+如果你想覆盖默认 PlantUML 主题：
 
 ```bash
 python scripts/workflow_viz.py generate --repo-root <repo> --theme plain --render
-```
-
-如果你想关闭默认主题注入：
-
-```bash
 python scripts/workflow_viz.py generate --repo-root <repo> --theme none --render
 ```
 
-## 当前版本已经提供什么
+默认输出仍然在：
 
-- `doctor / scan / generate` 三个核心命令
-- 默认输出到 `docs/workflow-viz/{insights,code,charts}`
-- PlantUML 渲染运行时预检
-- 面向多语言代码仓库的静态热点识别
-- 架构优先的默认图组
-- 中文图内标签、专属名词保留代码命名，以及暗色环境白色前景
-- 对旧版单张 `architecture` 产物的兼容清理
+- `docs/workflow-viz/insights/<group>/analysis.md` 或 `docs/workflow-viz/insights/<group>/<file>.md`
+- `docs/workflow-viz/code/`
+- `docs/workflow-viz/charts/`
 
-## 为什么它适合开源使用
+## MIT 许可证
 
-因为它解决的不是某个业务仓库的私有问题，而是一个越来越普遍的工程痛点：
+本项目采用 [MIT License](LICENSE) 发布。
 
-“AI 能快速产出代码，但团队未必能同样快速理解代码。”
-
-如果你也遇到这些情况，这个 skill 会很适合你：
-
-- 你在用 Codex、Claude Code 或类似 coding agent
-- 你正在维护大量 AI 生成代码
-- 你觉得团队理解流程代码越来越慢
-- 你希望把“画图”变成一个稳定、低摩擦、能持续更新的工程动作
-
-## 可靠性
-
-当前仓库已经包含针对关键行为的自动化测试，覆盖了：
-
-- 默认输出目录
-- 架构优先的推荐图组
-- PlantUML 主题注入与关闭
-- 图片优先 Markdown 结构
-- 旧产物清理逻辑
-- 文档与参考文件的一致性
-
-## 一句话总结
-
-`workflow-viz` 不是一个“代码转流程图”玩具。
-
-它更像是一个给 coding agent 配的“代码理解加速器”：
-先判断哪里值得可视化，再把复杂流程沉淀成真正对人有帮助的文档资产。
+你可以在保留版权声明和许可声明的前提下使用、复制、修改、分发和再授权本项目，这也让它更适合被集成进团队内部工具链或二次封装成自己的 agent 工作流。
