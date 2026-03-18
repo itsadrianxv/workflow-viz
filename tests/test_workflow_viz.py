@@ -21,81 +21,206 @@ def load_workflow_viz():
 workflow_viz = load_workflow_viz()
 
 
-def make_result(
-    relative_path: str = "src/sample_service.py",
+def make_metrics(
+    relative_path: str = "src/application/services/order_service.py",
     *,
     role_hints: set[str] | None = None,
-    entrypoint: str = "handle_request",
+    entrypoint: str = "handle_order",
+    complexity: int = 12,
+    max_nesting: int = 4,
+    decisions: int = 6,
+    early_exits: int = 1,
+    exception_handlers: int = 1,
+    distinct_calls: int = 7,
+    call_count: int = 8,
+    async_categories: set[str] | None = None,
+    async_coordination: bool = False,
+    async_marker_total: int = 0,
+    state_count: int = 1,
+    transition_count: int = 1,
+    exception_paths: int = 1,
+    cross_module_refs: int = 4,
+    data_flow_markers: int = 1,
+    import_count: int = 5,
+    explicit_target: bool = True,
 ):
     fn = workflow_viz.FunctionMetrics(
         name=entrypoint,
-        complexity=12,
-        max_nesting=4,
-        decisions=6,
-        early_exits=1,
-        exception_handlers=2,
-        distinct_calls=7,
-        call_count=8,
-        async_markers=4,
+        complexity=complexity,
+        max_nesting=max_nesting,
+        decisions=decisions,
+        early_exits=early_exits,
+        exception_handlers=exception_handlers,
+        distinct_calls=distinct_calls,
+        call_count=call_count,
+        async_markers=async_marker_total,
         start_line=10,
         end_line=48,
     )
     relative = Path(relative_path)
-    metrics = workflow_viz.FileMetrics(
+    return workflow_viz.FileMetrics(
         path=REPO_ROOT / relative,
         relative_path=relative,
         language="python",
         loc=120,
         functions=[fn],
-        import_count=5,
-        cross_module_refs=4,
-        async_categories={"async-await", "events"},
-        async_coordination=True,
-        async_marker_total=5,
-        state_count=3,
-        transition_count=4,
-        exception_paths=3,
-        role_hints=role_hints or {"workflow", "handler"},
-        data_flow_markers=4,
+        import_count=import_count,
+        cross_module_refs=cross_module_refs,
+        async_categories=async_categories or set(),
+        async_coordination=async_coordination,
+        async_marker_total=async_marker_total,
+        state_count=state_count,
+        transition_count=transition_count,
+        exception_paths=max(exception_paths, exception_handlers),
+        role_hints=role_hints or set(),
+        data_flow_markers=data_flow_markers,
         entrypoint=entrypoint,
-        explicit_target=False,
+        explicit_target=explicit_target,
     )
-    return workflow_viz.evaluate_file(metrics)
+
+
+def make_result(relative_path: str = "src/application/services/order_service.py", **kwargs):
+    return workflow_viz.evaluate_file(make_metrics(relative_path, **kwargs))
 
 
 class WorkflowVizTests(unittest.TestCase):
     def test_default_docs_root_moves_to_workflow_viz_directory(self):
         self.assertEqual(workflow_viz.DEFAULT_DOCS_ROOT, Path("docs/workflow-viz"))
 
-    def test_recommended_diagrams_prioritize_architecture_pack(self):
-        result = make_result()
+    def test_detect_file_role_from_representative_paths(self):
+        cases = [
+            (
+                "src/application/services/order_service.py",
+                {"application", "service"},
+                "handle_order",
+                "application-service",
+            ),
+            (
+                "src/domain/services/pricing_service.py",
+                {"domain", "service"},
+                "price_order",
+                "domain-service",
+            ),
+            (
+                "src/domain/entities/order.py",
+                {"entity", "domain"},
+                "recalculate_total",
+                "entity",
+            ),
+            (
+                "src/domain/aggregates/order_aggregate.py",
+                {"aggregate", "root"},
+                "advance_status",
+                "aggregate-root",
+            ),
+            (
+                "src/infrastructure/repositories/order_repository.py",
+                {"repository", "storage"},
+                "save",
+                "repository",
+            ),
+            (
+                "src/infrastructure/adapters/payment_gateway_adapter.py",
+                {"adapter", "gateway"},
+                "send_payment",
+                "infrastructure-adapter",
+            ),
+            (
+                "src/workflows/order_workflow.py",
+                {"workflow", "orchestrator"},
+                "run_order_workflow",
+                "workflow-orchestrator",
+            ),
+        ]
 
-        self.assertEqual(
-            result.recommended_diagrams[:5],
-            [
-                "architecture-context",
-                "architecture-modules",
-                "architecture-dependencies",
-                "activity",
-                "sequence",
-            ],
+        for relative_path, role_hints, entrypoint, expected in cases:
+            metrics = make_metrics(relative_path, role_hints=role_hints, entrypoint=entrypoint)
+            self.assertEqual(workflow_viz.detect_file_role(metrics), expected)
+
+    def test_recommended_diagrams_follow_role_templates(self):
+        cases = [
+            (
+                "src/application/services/order_service.py",
+                {"application", "service"},
+                "application-service",
+                ["sequence", "activity", "boundary-context"],
+            ),
+            (
+                "src/domain/services/pricing_service.py",
+                {"domain", "service"},
+                "domain-service",
+                ["domain-structure", "boundary-context", "activity"],
+            ),
+            (
+                "src/domain/entities/order.py",
+                {"entity", "domain"},
+                "entity",
+                ["domain-structure", "boundary-context", "state"],
+            ),
+            (
+                "src/domain/aggregates/order_aggregate.py",
+                {"aggregate", "root"},
+                "aggregate-root",
+                ["state", "boundary-context", "domain-structure"],
+            ),
+            (
+                "src/infrastructure/repositories/order_repository.py",
+                {"repository", "storage"},
+                "repository",
+                ["boundary-context", "data-flow", "sequence"],
+            ),
+            (
+                "src/infrastructure/adapters/payment_gateway_adapter.py",
+                {"adapter", "gateway"},
+                "infrastructure-adapter",
+                ["sequence", "boundary-context", "data-flow"],
+            ),
+            (
+                "src/workflows/order_workflow.py",
+                {"workflow", "orchestrator"},
+                "workflow-orchestrator",
+                ["sequence", "activity", "boundary-context"],
+            ),
+        ]
+
+        for relative_path, role_hints, expected_role, expected_diagrams in cases:
+            result = make_result(relative_path, role_hints=role_hints)
+            self.assertEqual(result.file_role, expected_role)
+            self.assertEqual(result.recommended_diagrams[:3], expected_diagrams)
+
+    def test_entity_state_signal_promotes_state_to_first_diagram(self):
+        result = make_result(
+            "src/domain/entities/order.py",
+            role_hints={"entity", "domain"},
+            state_count=5,
+            transition_count=7,
+            complexity=6,
+            max_nesting=2,
+            decisions=3,
+            distinct_calls=3,
+            call_count=3,
+            cross_module_refs=2,
+            data_flow_markers=0,
         )
+
+        self.assertEqual(result.file_role, "entity")
+        self.assertEqual(result.recommended_diagrams[:3], ["state", "domain-structure", "boundary-context"])
 
     def test_build_plantuml_uses_default_theme_and_code_names(self):
         result = make_result()
 
-        architecture = workflow_viz.build_plantuml(result, "architecture-context", theme="materia")
-        sequence = workflow_viz.build_plantuml(result, "sequence", theme="materia")
+        boundary = workflow_viz.build_plantuml(result, "boundary-context", theme="materia")
+        structure = workflow_viz.build_plantuml(result, "domain-structure", theme="materia")
 
-        self.assertTrue(architecture.startswith("@startuml\n!theme materia\n"))
-        self.assertIn("handle_request", architecture)
-        self.assertNotIn("TODO collaborator", architecture)
-        self.assertNotIn("coordinates", architecture)
+        self.assertTrue(boundary.startswith("@startuml\n!theme materia\n"))
+        self.assertIn("handle_order", boundary)
+        self.assertNotIn("TODO collaborator", boundary)
+        self.assertNotIn("coordinates", boundary)
 
-        self.assertTrue(sequence.startswith("@startuml\n!theme materia\n"))
-        self.assertIn("handle_request", sequence)
-        self.assertNotIn("invoke", sequence)
-        self.assertNotIn("complete", sequence)
+        self.assertTrue(structure.startswith("@startuml\n!theme materia\n"))
+        self.assertIn("handle_order", structure)
+        self.assertNotIn("invoke", structure)
+        self.assertNotIn("complete", structure)
 
     def test_build_plantuml_supports_theme_override_and_disable(self):
         result = make_result()
@@ -116,7 +241,7 @@ class WorkflowVizTests(unittest.TestCase):
         self.assertIn("skinparam ArrowColor #FFFFFF", activity)
         self.assertIn("skinparam LineColor #FFFFFF", activity)
 
-    def test_build_markdown_is_image_first_and_supports_nested_chart_paths(self):
+    def test_build_markdown_is_image_first_and_uses_role_based_intro(self):
         result = make_result()
         slug = workflow_viz.slug_for_path(result.metrics.relative_path)
 
@@ -124,9 +249,11 @@ class WorkflowVizTests(unittest.TestCase):
 
         self.assertIn("## ", markdown)
         self.assertIn("### ", markdown)
-        self.assertIn("![](", markdown.replace(f"![{workflow_viz.chart_title('architecture-context')}]", "![]"))
-        self.assertIn(f"../../charts/{slug}-architecture-context.svg", markdown)
-        self.assertNotIn("## Responsibilities", markdown)
+        self.assertIn(f"../../charts/{slug}-sequence.svg", markdown)
+        self.assertIn("文件角色", markdown)
+        self.assertIn("推荐阅读顺序", markdown)
+        self.assertNotIn("架构图组", markdown)
+        self.assertNotIn("先看下面这组架构图", markdown)
 
     def test_plan_markdown_outputs_uses_shared_module_directory_for_related_files(self):
         handler = make_result("src/payment/handler.py", role_hints={"payment", "workflow", "handler"})
@@ -181,15 +308,15 @@ class WorkflowVizTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertFalse(legacy_code.exists())
             self.assertFalse(legacy_chart.exists())
-            markdown_dir = insights_dir / "sample-service"
+            markdown_dir = insights_dir / "order-service"
             markdown_path = markdown_dir / "analysis.md"
             self.assertTrue(markdown_path.exists())
             self.assertFalse((insights_dir / f"{slug}.md").exists())
             self.assertFalse((insights_dir / "index.md").exists())
-            self.assertIn(f"../../charts/{slug}-architecture-context.svg", markdown_path.read_text(encoding="utf-8"))
-            self.assertTrue((code_dir / f"{slug}-architecture-context.puml").exists())
-            self.assertTrue((code_dir / f"{slug}-architecture-modules.puml").exists())
-            self.assertTrue((code_dir / f"{slug}-architecture-dependencies.puml").exists())
+            self.assertIn(f"../../charts/{slug}-sequence.svg", markdown_path.read_text(encoding="utf-8"))
+            self.assertTrue((code_dir / f"{slug}-sequence.puml").exists())
+            self.assertTrue((code_dir / f"{slug}-activity.puml").exists())
+            self.assertTrue((code_dir / f"{slug}-boundary-context.puml").exists())
             self.assertFalse((insights_dir / "code").exists())
             self.assertFalse((insights_dir / "charts").exists())
 
@@ -297,47 +424,30 @@ class WorkflowVizTests(unittest.TestCase):
 
         self.assertIn('fill="#222222" x="16" y="28">gradient_box</text>', normalized)
 
-    def test_documentation_files_describe_grouped_markdown_defaults(self):
+    def test_documentation_files_describe_role_based_diagram_defaults(self):
         skill = (REPO_ROOT / "SKILL.md").read_text(encoding="utf-8")
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         readme_en = (REPO_ROOT / "README_EN.md").read_text(encoding="utf-8")
         template = (REPO_ROOT / "references" / "markdown-template.md").read_text(encoding="utf-8")
         selection = (REPO_ROOT / "references" / "diagram-selection.md").read_text(encoding="utf-8")
+        heuristics = (REPO_ROOT / "references" / "heuristics.md").read_text(encoding="utf-8")
         runtime = (REPO_ROOT / "references" / "runtime-setup.md").read_text(encoding="utf-8")
 
-        self.assertIn("!theme materia", skill)
-        self.assertIn("architecture-context", skill)
-        self.assertIn("architecture-modules", skill)
-        self.assertIn("architecture-dependencies", skill)
-        self.assertIn("docs/workflow-viz/code", skill)
-        self.assertIn("docs/workflow-viz/charts", skill)
-        self.assertIn("docs/workflow-viz/insights", skill)
-        self.assertIn("docs/workflow-viz/insights/<group>/analysis.md", skill)
-        self.assertIn("docs/workflow-viz/insights/<group>/<file>.md", skill)
-        self.assertNotIn("docs/workflow-viz/insights/index.md", skill)
-        self.assertIn("docs/workflow-viz/code", readme)
-        self.assertIn("docs/workflow-viz/charts", readme)
-        self.assertIn("docs/workflow-viz/insights", readme)
-        self.assertIn("analysis.md", readme)
-        self.assertIn("insights/<group>/", readme)
-        self.assertIn("docs/workflow-viz/code", readme_en)
-        self.assertIn("docs/workflow-viz/charts", readme_en)
-        self.assertIn("docs/workflow-viz/insights", readme_en)
-        self.assertIn("analysis.md", readme_en)
-        self.assertIn("insights/<group>/", readme_en)
-        self.assertIn("../../charts/<slug>-architecture-context.svg", template)
-        self.assertNotIn("](../charts/<slug>-architecture-context.svg)", template)
-        self.assertIn("free-floating labels white", readme_en)
-        self.assertIn("light-filled shapes stay dark", readme_en)
-        self.assertIn("浅色图形里的文字保留深色", skill)
-        self.assertIn("architecture-context", selection)
-        self.assertIn("architecture-modules", selection)
-        self.assertIn("architecture-dependencies", selection)
-        self.assertIn("!theme materia", runtime)
-        self.assertIn("docs/workflow-viz/code", runtime)
-        self.assertIn("docs/workflow-viz/charts", runtime)
-        self.assertIn("docs/workflow-viz/insights", runtime)
-        self.assertIn("analysis.md", runtime)
+        self.assertIn("domain-structure", skill)
+        self.assertIn("boundary-context", skill)
+        self.assertIn("object-snapshot", skill)
+        self.assertIn("工作流编排", skill)
+        self.assertNotIn("架构图是默认重点", skill)
+
+        self.assertIn("domain-structure", readme)
+        self.assertIn("boundary-context", readme)
+        self.assertIn("role-based", readme_en)
+        self.assertIn("domain-structure", readme_en)
+        self.assertIn("../../charts/<slug>-sequence.svg", template)
+        self.assertIn("domain-structure", selection)
+        self.assertIn("boundary-context", selection)
+        self.assertIn("aggregate root", heuristics.lower())
+        self.assertIn("domain-structure", runtime)
 
 
 if __name__ == "__main__":
