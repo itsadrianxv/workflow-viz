@@ -154,6 +154,7 @@ class WorkflowVizTests(unittest.TestCase):
         skill = (REPO_ROOT / "SKILL.md").read_text(encoding="utf-8")
         template = (REPO_ROOT / "references" / "markdown-template.md").read_text(encoding="utf-8")
         selection = (REPO_ROOT / "references" / "diagram-selection.md").read_text(encoding="utf-8")
+        runtime = (REPO_ROOT / "references" / "runtime-setup.md").read_text(encoding="utf-8")
 
         self.assertIn("!theme materia", skill)
         self.assertIn("architecture-context", skill)
@@ -165,6 +166,8 @@ class WorkflowVizTests(unittest.TestCase):
         self.assertIn("架构总览图", selection)
         self.assertIn("模块拆解图", selection)
         self.assertIn("依赖职责图", selection)
+        self.assertIn("!theme materia", runtime)
+        self.assertIn("docs/workflow-viz/insights", runtime)
 
 
 if __name__ == "__main__":
