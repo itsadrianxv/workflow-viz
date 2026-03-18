@@ -1,0 +1,11 @@
+{
+  "name": "workflow-viz",
+  "description": "Auto-detect high-comprehension-cost code and suggest workflow visualization documentation",
+  "version": "1.0.0",
+  "author": {
+    "name": "hungyuk"
+  },
+  "keywords": ["workflow", "visualization", "complexity", "plantuml"],
+  "skills": "./",
+  "hooks": "./hooks/hooks.json"
+}

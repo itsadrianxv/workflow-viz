@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# PostToolUse hook: detect high-comprehension-cost code after Write/Edit
+# Reads JSON from stdin, extracts file path, runs workflow_viz.py scan,
+# and injects additionalContext if complexity score >= 60.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Read stdin JSON
+INPUT=$(cat)
+
+# Use python to extract fields and run analysis in one shot
+python3 - "$INPUT" "$PLUGIN_ROOT" <<'PYEOF'
+import json
+import os
+import subprocess
+import sys
+
+input_json = sys.argv[1]
+plugin_root = sys.argv[2]
+
+try:
+    data = json.loads(input_json)
+except (json.JSONDecodeError, IndexError):
+    print("{}")
+    sys.exit(0)
+
+# Extract file path from tool input
+file_path = None
+tool_input = data.get("tool_input", {})
+if isinstance(tool_input, dict):
+    file_path = tool_input.get("file_path")
+
+if not file_path:
+    print("{}")
+    sys.exit(0)
+
+# Quick extension filter
+CODE_EXTENSIONS = {
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".java",
+    ".rb", ".php", ".cs", ".kt", ".rs", ".swift", ".cpp", ".c",
+}
+ext = os.path.splitext(file_path)[1].lower()
+if ext not in CODE_EXTENSIONS:
+    print("{}")
+    sys.exit(0)
+
+# Skip excluded directories
+EXCLUDED_PARTS = {
+    "node_modules", "vendor", "dist", "build", ".next", ".cache",
+    ".turbo", "docs/workflow-viz", ".git", ".venv", "venv", "env",
+}
+path_lower = file_path.replace("\\", "/").lower()
+for excluded in EXCLUDED_PARTS:
+    if f"/{excluded}/" in path_lower or path_lower.startswith(f"{excluded}/"):
+        print("{}")
+        sys.exit(0)
+
+# Skip if file doesn't exist
+if not os.path.isfile(file_path):
+    print("{}")
+    sys.exit(0)
+
+# Determine repo root from cwd
+cwd = data.get("cwd", os.getcwd())
+
+# Run workflow_viz.py scan
+scanner = os.path.join(plugin_root, "scripts", "workflow_viz.py")
+if not os.path.isfile(scanner):
+    print("{}")
+    sys.exit(0)
+
+try:
+    result = subprocess.run(
+        [sys.executable, scanner, "scan",
+         "--repo-root", cwd,
+         "--paths", file_path,
+         "--format", "json",
+         "--top", "1"],
+        capture_output=True, text=True, timeout=25, cwd=cwd,
+    )
+    if result.returncode != 0:
+        print("{}")
+        sys.exit(0)
+
+    scan_results = json.loads(result.stdout)
+except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+    print("{}")
+    sys.exit(0)
+
+if not scan_results:
+    print("{}")
+    sys.exit(0)
+
+entry = scan_results[0]
+score = entry.get("score", 0)
+selected = entry.get("selected", False)
+
+if not selected or score < 60:
+    print("{}")
+    sys.exit(0)
+
+# Build context message
+rel_path = entry.get("path", file_path)
+strong = ", ".join(entry.get("strong_signals", [])) or "无"
+diagrams = ", ".join(entry.get("recommended_diagrams", []))
+breakdown = entry.get("score_breakdown", {})
+breakdown_str = " | ".join(f"{k}={v}" for k, v in breakdown.items())
+
+msg = (
+    f"⚠️ 复杂度检测：{rel_path} 的理解成本评分为 {score}/100（热点阈值 60）。\\n"
+    f"强信号：{strong}\\n"
+    f"评分明细：{breakdown_str}\\n"
+    f"推荐图类型：{diagrams}\\n"
+    f"建议运行 workflow-viz skill 为该文件生成可视化文档。"
+)
+
+output = {
+    "hookSpecificOutput": {
+        "hookEventName": "PostToolUse",
+        "additionalContext": msg,
+    }
+}
+print(json.dumps(output, ensure_ascii=False))
+PYEOF

@@ -1,0 +1,18 @@
+{
+  "name": "workflow-viz-dev",
+  "description": "Development marketplace for workflow-viz plugin",
+  "owner": {
+    "name": "hungyuk"
+  },
+  "plugins": [
+    {
+      "name": "workflow-viz",
+      "description": "Auto-detect high-comprehension-cost code and suggest workflow visualization documentation",
+      "version": "1.0.0",
+      "source": "./",
+      "author": {
+        "name": "hungyuk"
+      }
+    }
+  ]
+}
