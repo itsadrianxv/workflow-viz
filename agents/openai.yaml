@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow Viz"
+  short_description: "识别高理解成本代码，优先输出架构图组三连和图主文辅的可视化洞察文档"
+  default_prompt: "Use $workflow-viz to scan this repository for high-comprehension-cost code and generate architecture-first visual insights under docs/workflow-viz/insights."
