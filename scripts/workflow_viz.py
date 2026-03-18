@@ -23,48 +23,89 @@ DEFAULT_THEME = "materia"
 MAX_FILE_BYTES = 350_000
 DARK_MODE_FOREGROUND = "#FFFFFF"
 
-ARCHITECTURE_DIAGRAMS = [
+LEGACY_ARCHITECTURE_DIAGRAMS = [
     "architecture-context",
     "architecture-modules",
     "architecture-dependencies",
 ]
-CORE_DIAGRAMS = [*ARCHITECTURE_DIAGRAMS, "activity", "sequence"]
+CORE_DIAGRAMS = [
+    "sequence",
+    "activity",
+    "domain-structure",
+    "boundary-context",
+    "state",
+    "data-flow",
+]
+SUPPLEMENTAL_DIAGRAMS = [
+    "branch-decision",
+    "async-concurrency",
+    "object-snapshot",
+]
 LEGACY_ARCHITECTURE_KEYS = ("architecture",)
+
+ROLE_DISPLAY_NAMES = {
+    "application-service": "应用服务",
+    "domain-service": "领域服务",
+    "entity": "实体",
+    "aggregate-root": "聚合根",
+    "repository": "仓储",
+    "infrastructure-adapter": "基础设施适配器",
+    "workflow-orchestrator": "工作流编排",
+}
+
+ROLE_DIAGRAM_TEMPLATES = {
+    "application-service": ["sequence", "activity", "boundary-context"],
+    "domain-service": ["domain-structure", "boundary-context", "activity"],
+    "entity": ["domain-structure", "boundary-context", "state"],
+    "aggregate-root": ["state", "boundary-context", "domain-structure"],
+    "repository": ["boundary-context", "data-flow", "sequence"],
+    "infrastructure-adapter": ["sequence", "boundary-context", "data-flow"],
+    "workflow-orchestrator": ["sequence", "activity", "boundary-context"],
+}
 
 CHART_TITLES = {
     "architecture-context": "架构总览图",
     "architecture-modules": "模块拆解图",
     "architecture-dependencies": "依赖职责图",
+    "boundary-context": "边界上下文图",
+    "domain-structure": "领域结构图",
     "activity": "主流程活动图",
     "sequence": "协作顺序图",
     "branch-decision": "分支判定图",
     "state": "状态图",
     "async-concurrency": "异步/并发图",
     "data-flow": "数据/依赖流图",
+    "object-snapshot": "对象快照图",
 }
 
 CHART_INTROS = {
     "architecture-context": "图前说明：先看这个文件位于哪一层、被谁触发、向哪些外部角色发起协作。",
     "architecture-modules": "图前说明：这张图把文件内部的关键职责分成几个稳定模块，帮助快速识别边界。",
     "architecture-dependencies": "图前说明：重点看入口如何把职责分派给不同依赖，以及每个依赖承担什么角色。",
+    "boundary-context": "图前说明：先看这个文件对外暴露什么契约、依赖哪些边界，以及它站在什么局部上下文里。",
+    "domain-structure": "图前说明：这张图优先解释文件内部的重要概念、关系和职责边界。",
     "activity": "图前说明：沿着主入口顺序阅读，先建立正常路径的执行心智模型。",
     "sequence": "图前说明：这张图强调调用时序，适合定位谁先发起、谁后响应、哪里容易串线。",
     "branch-decision": "图前说明：把主要分支和守卫条件单独抽出来，便于区分正常路径与特殊路径。",
     "state": "图前说明：当文件存在状态切换时，优先看清每个阶段之间如何流转。",
     "async-concurrency": "图前说明：这张图专门突出异步触发、并发协作和等待回收的关系。",
     "data-flow": "图前说明：按数据从输入到输出的流向阅读，能更快看清中间变换链路。",
+    "object-snapshot": "图前说明：这张图把关键时刻的对象或聚合形态单独摊开，帮助理解约束落点。",
 }
 
 CHART_OUTROS = {
     "architecture-context": "图后解读：补全真实调用方、外部系统和边界约束后，这张图应能回答“它在整体架构中的位置”。",
     "architecture-modules": "图后解读：补齐真实模块名称后，这张图应能回答“内部职责如何拆分，哪些模块不要混改”。",
     "architecture-dependencies": "图后解读：补齐真实依赖职责后，这张图应能回答“入口是如何协调多个依赖完成任务的”。",
+    "boundary-context": "图后解读：补齐真实端口、依赖和上下游后，这张图应能回答“这个文件处在什么边界上”。",
+    "domain-structure": "图后解读：补齐真实概念名、关系和职责后，这张图应能回答“文件局部结构是如何组织的”。",
     "activity": "图后解读：把真实输入、关键判定和产出补进去后，这张图应能回答“正常流程到底怎么走”。",
     "sequence": "图后解读：把真实协作者和消息名补进去后，这张图应能回答“关键协作顺序是否符合预期”。",
     "branch-decision": "图后解读：把真实条件替换进去后，这张图应能回答“哪些条件最容易引发路径分叉”。",
     "state": "图后解读：把真实状态和值守条件补齐后，这张图应能回答“状态变更的触发器和退出点是什么”。",
     "async-concurrency": "图后解读：把真实队列、回调和等待点补进去后，这张图应能回答“并发协调风险集中在哪”。",
     "data-flow": "图后解读：把真实数据对象补齐后，这张图应能回答“数据在各协作者之间怎样被加工和交付”。",
+    "object-snapshot": "图后解读：补齐真实字段和值守约束后，这张图应能回答“关键业务时刻的对象长什么样”。",
 }
 
 LANGUAGE_BY_EXTENSION = {
@@ -219,6 +260,15 @@ COORDINATION_PATTERNS = (
 )
 
 ROLE_HINT_TOKENS = (
+    "application",
+    "domain",
+    "service",
+    "entity",
+    "aggregate",
+    "root",
+    "repository",
+    "adapter",
+    "gateway",
     "workflow",
     "orchestrator",
     "pipeline",
@@ -290,6 +340,7 @@ class FileMetrics:
 @dataclass
 class AnalysisResult:
     metrics: FileMetrics
+    file_role: str
     strong_signals: list[str]
     medium_signals: list[str]
     gate_passed: bool
@@ -304,6 +355,7 @@ class AnalysisResult:
     def to_dict(self) -> dict[str, object]:
         return {
             "path": self.metrics.relative_path.as_posix(),
+            "file_role": self.file_role,
             "language": self.metrics.language,
             "loc": self.metrics.loc,
             "score": self.score,
@@ -778,6 +830,69 @@ def detect_role_hints(text: str, relative_path: Path, entrypoint: str) -> set[st
     return {token for token in ROLE_HINT_TOKENS if token in haystack}
 
 
+def detect_file_role(metrics: FileMetrics) -> str:
+    relative_path = metrics.relative_path.as_posix().lower()
+    stem = metrics.relative_path.stem.lower()
+    entrypoint = metrics.entrypoint.lower()
+    hints = {hint.lower() for hint in metrics.role_hints}
+
+    def has_any(*tokens: str) -> bool:
+        for token in tokens:
+            if token in relative_path or token in stem or token in entrypoint or token in hints:
+                return True
+        return False
+
+    if has_any("workflow", "orchestrator", "pipeline", "saga") or "/workflows/" in relative_path:
+        return "workflow-orchestrator"
+
+    if has_any("repository") or "/repositories/" in relative_path or stem.endswith("_repo") or stem.endswith("repository"):
+        return "repository"
+
+    if has_any("adapter", "gateway", "client", "connector") or "/adapters/" in relative_path:
+        return "infrastructure-adapter"
+
+    if has_any("aggregate", "aggregate-root", "aggregate_root", "root") or "/aggregates/" in relative_path:
+        return "aggregate-root"
+
+    if "/domain/services/" in relative_path or ("domain" in hints and "service" in hints):
+        return "domain-service"
+
+    if (
+        "/application/" in relative_path
+        or "/usecases/" in relative_path
+        or "/use-cases/" in relative_path
+        or ("application" in hints and "service" in hints)
+    ):
+        return "application-service"
+
+    if has_any("entity") or "/entities/" in relative_path:
+        return "entity"
+
+    if has_any("service", "handler", "controller", "usecase", "use-case"):
+        return "application-service"
+
+    if has_any("dispatch", "orchestrate", "process"):
+        return "workflow-orchestrator"
+
+    if "/domain/" in relative_path:
+        return "entity"
+
+    return "application-service"
+
+
+def append_diagram(diagrams: list[str], diagram_key: str) -> list[str]:
+    if diagram_key not in diagrams:
+        diagrams.append(diagram_key)
+    return diagrams
+
+
+def promote_diagram(diagrams: list[str], diagram_key: str, position: int) -> list[str]:
+    remaining = [item for item in diagrams if item != diagram_key]
+    bounded_position = max(0, min(position, len(remaining)))
+    remaining.insert(bounded_position, diagram_key)
+    return remaining
+
+
 def analyze_file(path: Path, repo_root: Path, explicit_target: bool = False) -> FileMetrics:
     text = read_text(path)
     language = language_for_path(path)
@@ -817,6 +932,7 @@ def evaluate_file(metrics: FileMetrics) -> AnalysisResult:
         reverse=True,
     )[:3]
     peak = top_functions[0] if top_functions else FunctionMetrics("<module>", 1, 0, 0, 0, 0, 0, 0, 0, 1, 1)
+    file_role = detect_file_role(metrics)
 
     strong_signals: list[str] = []
     medium_signals: list[str] = []
@@ -903,18 +1019,47 @@ def evaluate_file(metrics: FileMetrics) -> AnalysisResult:
     else:
         selection_reason = "below-threshold"
 
-    recommended_diagrams = [*CORE_DIAGRAMS]
+    recommended_diagrams = list(ROLE_DIAGRAM_TEMPLATES[file_role])
+
+    if file_role == "aggregate-root":
+        recommended_diagrams = promote_diagram(recommended_diagrams, "state", 0)
+    if file_role == "repository":
+        recommended_diagrams = promote_diagram(recommended_diagrams, "boundary-context", 0)
+
+    if peak.distinct_calls >= 6 and file_role in {"application-service", "workflow-orchestrator", "infrastructure-adapter"}:
+        recommended_diagrams = promote_diagram(recommended_diagrams, "sequence", 0)
+
+    if peak.decisions >= 5 and peak.distinct_calls <= 4:
+        target_position = 0 if file_role == "domain-service" else 1
+        recommended_diagrams = promote_diagram(recommended_diagrams, "activity", target_position)
+
     if peak.decisions >= 4 or peak.max_nesting >= 3 or metrics.exception_paths >= 2:
-        recommended_diagrams.append("branch-decision")
+        recommended_diagrams = append_diagram(recommended_diagrams, "branch-decision")
     if metrics.state_count >= 3 or metrics.transition_count >= 4:
-        recommended_diagrams.append("state")
+        if file_role == "entity":
+            recommended_diagrams = promote_diagram(recommended_diagrams, "state", 0)
+        elif file_role == "aggregate-root":
+            recommended_diagrams = promote_diagram(recommended_diagrams, "state", 0)
+        elif file_role == "workflow-orchestrator":
+            recommended_diagrams = promote_diagram(recommended_diagrams, "state", 1)
+        else:
+            recommended_diagrams = append_diagram(recommended_diagrams, "state")
     if len(metrics.async_categories) >= 2 or metrics.async_coordination:
-        recommended_diagrams.append("async-concurrency")
+        recommended_diagrams = append_diagram(recommended_diagrams, "async-concurrency")
     if metrics.cross_module_refs >= 3 or metrics.data_flow_markers >= 3:
-        recommended_diagrams.append("data-flow")
+        if file_role == "repository":
+            recommended_diagrams = promote_diagram(recommended_diagrams, "data-flow", 1)
+        elif file_role == "infrastructure-adapter":
+            recommended_diagrams = promote_diagram(recommended_diagrams, "data-flow", 2)
+        else:
+            recommended_diagrams = append_diagram(recommended_diagrams, "data-flow")
+
+    if file_role in {"entity", "aggregate-root"} and metrics.state_count >= 4 and metrics.transition_count >= 6:
+        recommended_diagrams = append_diagram(recommended_diagrams, "object-snapshot")
 
     return AnalysisResult(
         metrics=metrics,
+        file_role=file_role,
         strong_signals=strong_signals,
         medium_signals=medium_signals,
         gate_passed=gate_passed,
@@ -1104,6 +1249,28 @@ GENERIC_FILE_STEMS = {
     "mod",
 }
 
+GENERIC_CONTEXT_DIR_NAMES = {
+    "application",
+    "applications",
+    "app",
+    "domain",
+    "domains",
+    "infrastructure",
+    "infra",
+    "service",
+    "services",
+    "entity",
+    "entities",
+    "aggregate",
+    "aggregates",
+    "repository",
+    "repositories",
+    "adapter",
+    "adapters",
+    "workflow",
+    "workflows",
+}
+
 
 def slugify_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
@@ -1121,6 +1288,10 @@ def meaningful_parent_parts(relative_path: Path) -> list[str]:
     return parts
 
 
+def contextual_parent_parts(relative_path: Path) -> list[str]:
+    return [part for part in meaningful_parent_parts(relative_path) if part not in GENERIC_CONTEXT_DIR_NAMES]
+
+
 def semantic_file_stem(relative_path: Path) -> str:
     stem = slugify_name(relative_path.stem)
     if stem and stem not in GENERIC_FILE_STEMS:
@@ -1136,14 +1307,14 @@ def semantic_file_stem(relative_path: Path) -> str:
 
 def single_file_group_name(relative_path: Path) -> str:
     stem = semantic_file_stem(relative_path)
-    parent_parts = meaningful_parent_parts(relative_path)
+    parent_parts = contextual_parent_parts(relative_path)
     if parent_parts and stem and stem != parent_parts[-1]:
         return f"{parent_parts[-1]}-{stem}" if not stem.startswith(f"{parent_parts[-1]}-") else stem
     return stem or slug_for_path(relative_path)
 
 
 def shared_group_key(relative_path: Path) -> str | None:
-    parent_parts = meaningful_parent_parts(relative_path)
+    parent_parts = contextual_parent_parts(relative_path)
     if not parent_parts:
         return None
     return parent_parts[-1]
@@ -1226,6 +1397,10 @@ def chart_intro(diagram_key: str) -> str:
 
 def chart_outro(diagram_key: str) -> str:
     return CHART_OUTROS[diagram_key]
+
+
+def role_display_name(file_role: str) -> str:
+    return ROLE_DISPLAY_NAMES.get(file_role, file_role)
 
 
 def emit_theme(theme: str) -> str:
@@ -1608,7 +1783,7 @@ def resolve_output_layout(docs_root: Path) -> tuple[Path, Path, Path, Path]:
 def cleanup_nested_output_artifacts(slug: str, insights_dir: Path, diagram_keys: Sequence[str]) -> None:
     nested_code_dir = insights_dir / "code"
     nested_charts_dir = insights_dir / "charts"
-    expected_keys = {*LEGACY_ARCHITECTURE_KEYS, *diagram_keys}
+    expected_keys = {*LEGACY_ARCHITECTURE_KEYS, *LEGACY_ARCHITECTURE_DIAGRAMS, *diagram_keys}
 
     for diagram_key in expected_keys:
         nested_code = nested_code_dir / f"{slug}-{diagram_key}.puml"
@@ -1638,6 +1813,9 @@ def cleanup_legacy_markdown_artifacts(insights_dir: Path, results: Sequence[Anal
 def build_markdown(result: AnalysisResult, slug: str, chart_rel_dir: str = "../charts") -> str:
     reasons = result.strong_signals or result.medium_signals or ["用户显式指定"]
     highlights = "；".join(reasons[:3])
+    top_three = result.recommended_diagrams[:3]
+    extra_diagrams = result.recommended_diagrams[3:]
+    role_name = role_display_name(result.file_role)
 
     def image_block(diagram_key: str, heading_level: str) -> list[str]:
         return [
@@ -1651,37 +1829,43 @@ def build_markdown(result: AnalysisResult, slug: str, chart_rel_dir: str = "../c
             "",
         ]
 
+    reading_order = [f"{index}. {chart_title(diagram_key)} `{diagram_key}`" for index, diagram_key in enumerate(top_three, start=1)]
+
     lines = [
         f"# 热点洞察：{result.metrics.relative_path.name}",
         "",
         f"- 源文件: `{result.metrics.relative_path.as_posix()}`",
         f"- 热点分数: `{result.score}`",
+        f"- 文件角色: `{role_name}`",
         f"- 主入口: `{result.metrics.entrypoint}`",
         f"- 触发原因: `{highlights}`",
         "",
         MARKDOWN_TEMPLATE_HINT.strip(),
         "",
-        "开头引导：先看下面这组架构图，建立这个热点文件所在位置、内部拆分和依赖职责的整体轮廓，再进入流程细节。",
+        f"开头引导：先按下面的推荐阅读顺序看前三张图，优先建立这个{role_name}文件最关键的理解框架，再补充额外图。",
         "",
-        "## 架构图组",
+        "## 推荐阅读顺序",
         "",
-        "这一组图默认优先生成，用来回答“它在系统哪里、内部怎么分、依赖如何协作”。",
+        *[f"- {item}" for item in reading_order],
+        "",
+        "## 固定前三张图",
         "",
     ]
-    for diagram_key in ARCHITECTURE_DIAGRAMS:
-        if diagram_key in result.recommended_diagrams:
-            lines.extend(image_block(diagram_key, "###"))
 
-    for diagram_key in result.recommended_diagrams:
-        if diagram_key in ARCHITECTURE_DIAGRAMS:
-            continue
+    for diagram_key in top_three:
+        lines.extend(image_block(diagram_key, "###"))
+
+    if extra_diagrams:
         lines.extend(
             [
-                f"## {chart_title(diagram_key)}",
+                "## 额外建议图",
+                "",
+                "这些图不是该角色的固定前三张，但当前文件的信号足够强，值得一并查看。",
                 "",
             ]
         )
-        lines.extend(image_block(diagram_key, "###"))
+        for diagram_key in extra_diagrams:
+            lines.extend(image_block(diagram_key, "###"))
 
     lines.extend(
         [
@@ -1696,6 +1880,46 @@ def build_plantuml(result: AnalysisResult, diagram_key: str, theme: str = DEFAUL
     entrypoint = entrypoint_code_name(result)
     title = chart_title(diagram_key)
     header = f"@startuml\n{emit_theme(theme)}{emit_dark_mode_skinparams()}title {title}\n"
+
+    if diagram_key == "boundary-context":
+        entrypoint_label = keyword_with_code_name("入口函数", entrypoint)
+        role_label = role_display_name(result.file_role)
+        return header + f"""skinparam shadowing false
+skinparam componentStyle rectangle
+
+rectangle "上游调用方" as caller
+rectangle "{entrypoint_label}" as entrypoint
+rectangle "{role_label}边界" as boundary
+rectangle "下游依赖" as dependency
+rectangle "外部系统" as external
+
+caller --> entrypoint : 发起调用
+entrypoint --> boundary : 暴露契约
+entrypoint --> dependency : 调用依赖
+entrypoint --> external : 访问资源
+dependency --> entrypoint : 返回结果
+@enduml
+"""
+
+    if diagram_key == "domain-structure":
+        role_label = role_display_name(result.file_role)
+        return header + f"""skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+class "{entrypoint}" as Entry {{
+  +handle()
+}}
+
+class "{role_label}核心概念" as Concept
+class "规则与约束" as Rules
+class "协作边界" as Boundary
+
+Entry --> Concept : 组织概念
+Concept --> Rules : 承载规则
+Concept --> Boundary : 约束边界
+Rules --> Boundary : 施加限制
+@enduml
+"""
 
     if diagram_key == "architecture-context":
         entrypoint_label = keyword_with_code_name("入口函数", entrypoint)
@@ -1843,6 +2067,21 @@ rectangle "输出结果" as Output
 Input --> Core : 接收
 Core --> Mid : 转换
 Mid --> Output : 产出
+@enduml
+"""
+
+    if diagram_key == "object-snapshot":
+        return header + f"""object "{entrypoint} : 关键对象" as Entity {{
+  状态 = 处理中
+  约束 = 已满足
+  输出 = 待确认
+}}
+
+object "边界约束" as Boundary {{
+  不变量 = 已校验
+}}
+
+Entity --> Boundary : 受约束
 @enduml
 """
 

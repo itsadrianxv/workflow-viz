@@ -13,14 +13,16 @@
 
 `workflow-viz` 的目标不是找“代码很多”的文件，而是找“理解成本高”的文件。
 
-在 v1 中，若开发者只靠线性阅读代码，很难快速建立下列至少两项心智模型，则视为高理解成本候选：
+在当前版本中，如果开发者只靠线性阅读代码，很难快速建立下列至少两项心智模型，则视为高理解成本候选：
 
 - 主执行流程
 - 分支决策路径
 - 协作者调用关系
-- 异步/并发时序
+- 异步或并发时序
 - 状态迁移
-- 异常/降级路径
+- 异常或降级路径
+- 文件局部结构
+- 局部边界和契约
 
 ## 第 2 层：仓库级候选筛选
 
@@ -58,6 +60,24 @@
 - 每个文件记录 1 到 3 个复杂度贡献最大的函数或方法
 - 文档以文件为单位生成
 
+### 角色提示
+
+评分仍然主要看复杂度信号，但现在会辅助识别文件角色。当前只区分：
+
+- application service
+- domain service
+- entity
+- aggregate root
+- repository
+- infrastructure adapter
+- workflow orchestrator
+
+常见提示来源：
+
+- 路径：`application/services`、`domain/services`、`entities`、`aggregates`、`repositories`、`adapters`、`workflows`
+- 文件名：`*_service`、`*_repository`、`*_adapter`、`*_workflow`
+- 词汇：`aggregate root`、`entity`、`repository`、`adapter`、`workflow`
+
 ### 两阶段门控
 
 #### 第一阶段：硬门控
@@ -66,6 +86,7 @@
 
 - 命中 1 个强信号
 - 或命中 2 个中信号
+- 或被用户显式点名
 
 #### 强信号
 
@@ -79,7 +100,7 @@
 
 极端升级强信号：
 
-- 单条主路径中出现 `>= 3` 类异步/并发模式，且包含同步、汇聚、重试、超时、事件回调、队列、锁、channel、timer 中至少一种关键协调点
+- 单条主路径中出现 `>= 3` 类异步或并发模式，且存在关键协调点
 - 一个入口点协调 `>= 6` 个不同协作者，且横跨 `>= 3` 个模块边界
 
 #### 中信号
@@ -100,50 +121,8 @@
 
 - 结构复杂性：45
 - 协作复杂性：20
-- 异步/并发复杂性：20
+- 异步或并发复杂性：20
 - 编排角色提示：15
-
-#### 结构复杂性子项
-
-- 圈复杂度
-- 嵌套深度
-- 分支密度
-- 提前返回或中断分支
-- 异常、重试、降级链
-- 状态迁移
-- 多阶段主流程
-
-#### 协作复杂性子项
-
-- 调用扇出
-- 跨模块依赖数
-- 依赖类型多样性
-- 回调链或委托链
-- 数据在多个协作者之间的转手次数
-
-#### 异步/并发复杂性子项
-
-- `async/await`
-- promise 链
-- 事件监听、发布订阅
-- queue、worker、scheduler
-- thread、lock、semaphore、channel
-- timeout、retry、backoff、timer
-- fan-out、fan-in、gather、race
-
-#### 编排角色提示子项
-
-只作辅助加分，不单独触发：
-
-- `workflow`
-- `orchestrator`
-- `pipeline`
-- `controller`
-- `handler`
-- `dispatch`
-- `execute`
-- `process`
-- `run`
 
 ### 阈值解释
 
@@ -153,12 +132,7 @@
 
 ### LOC 的角色
 
-LOC 不参与硬触发，只能用于：
+LOC 不参与硬触发，只用于：
 
 - 密度归一化
-- 近似文件之间的 tie-break
-
-因此：
-
-- 400 行顺序代码不应因为长而触发
-- 80 行但分支、状态和并发密集的 orchestrator 可以触发
+- 同分文件之间的 tie-break

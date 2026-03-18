@@ -1,48 +1,93 @@
 # 图类型选择
 
-## 默认必画
+## 设计原则
 
-每个热点文件默认先生成 5 张图，顺序固定为：
+`workflow-viz` 现在默认服务于单文件理解，不再把“系统总体架构”当作统一第一问题。
 
-- 架构总览图 `architecture-context`
-- 模块拆解图 `architecture-modules`
-- 依赖职责图 `architecture-dependencies`
-- 主流程活动图 `activity`
-- 协作顺序图 `sequence`
+选择逻辑分两层：
 
-前三张架构图共同回答：
+1. 先按文件角色给固定前三张图
+2. 再按状态、异步、分支、数据流等强信号补图或提权
 
-- 这个热点文件位于整体架构的哪一层
-- 文件内部的职责边界如何拆开
-- 主入口如何协调依赖完成任务
+## 核心图种
 
-后两张流程图回答：
+- `sequence`
+- `activity`
+- `domain-structure`
+- `boundary-context`
+- `state`
+- `data-flow`
 
-- 主流程按什么顺序推进
-- 关键协作者之间怎样按时序互动
+## 补充图种
 
-## 按条件增加
+- `branch-decision`
+- `async-concurrency`
+- `object-snapshot`
 
-### 分支判定图
+## 角色模板
+
+### 应用服务
+
+- `sequence`
+- `activity`
+- `boundary-context`
+
+### 领域服务
+
+- `domain-structure`
+- `boundary-context`
+- `activity`
+
+### 实体
+
+- `domain-structure`
+- `boundary-context`
+- `state`
+
+### 聚合根
+
+- `state`
+- `boundary-context`
+- `domain-structure`
+
+### 仓储
+
+- `boundary-context`
+- `data-flow`
+- `sequence`
+
+### 基础设施适配器
+
+- `sequence`
+- `boundary-context`
+- `data-flow`
+
+### 工作流编排
+
+- `sequence`
+- `activity`
+- `boundary-context`
+
+## 按条件增加或提权
+
+### `branch-decision`
 
 满足以下任一情况时增加：
 
 - 条件分支明显多
 - 守卫逻辑多
 - 提前返回或短路路径多
-- 异常/降级路径与正常路径交织
+- 异常或降级路径与正常路径交织
 
-### 状态图
+### `state`
 
-当存在明显状态迁移时增加：
+当存在明显状态迁移时增加或提权：
 
-- 生命周期阶段
-- `state` / `status` / `phase` / `mode` 切换
-- 激活、暂停、恢复、过期、关闭等模式变化
+- 生命周期阶段明显
+- `state` / `status` / `phase` / `mode` 切换明显
+- 激活、暂停、恢复、过期、关闭等模式变化明显
 
-不要为了对称而强行加状态图。
-
-### 异步/并发图
+### `async-concurrency`
 
 当异步复杂性明显时增加：
 
@@ -54,18 +99,22 @@
 - timeout / retry / backoff
 - fan-out / fan-in / gather / race
 
-### 数据/依赖流图
+### `data-flow`
 
-当跨模块协作或数据变换明显时增加：
+当跨模块协作或数据变换明显时增加或提权：
 
 - 输入在多个协作者之间流转
 - 数据变换链较长
-- 有明显聚合、拆分、归并、序列化、映射过程
+- 存在明显聚合、拆分、归并、序列化、映射过程
 
-## 选择原则
+### `object-snapshot`
 
-- 架构图优先，不要把单张架构图当成“意思一下”的装饰图。
-- 如果热点来自协作复杂性，先确保 3 张架构图信息完整，再补顺序图。
-- 如果热点来自结构复杂性，先保证架构图和主流程图能把骨架说清。
-- 如果热点来自异步复杂性，优先补顺序图和异步/并发图。
-- 不要为了“图多”而添加低价值图片。
+当实体或聚合根需要解释某个关键业务时刻的对象形态时增加。
+
+## 命名迁移
+
+旧的架构图三连不再是默认模板：
+
+- `architecture-context` -> 语义上迁移到 `boundary-context`
+- `architecture-modules` -> 语义上迁移到 `domain-structure`
+- `architecture-dependencies` -> 并入 `boundary-context`
