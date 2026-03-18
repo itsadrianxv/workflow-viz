@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -168,6 +169,9 @@ RGB_COLOR_RE = re.compile(
     r"(?:\s*,\s*(?P<alpha>\d*\.?\d+))?\s*\)\Z",
     re.IGNORECASE,
 )
+SVG_FILL_URL_RE = re.compile(r"url\(#(?P<id>[^)]+)\)\Z", re.IGNORECASE)
+SVG_NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
+TEXT_TAG_RE = re.compile(r"<text\b(?P<attrs>[^>]*)>", re.IGNORECASE)
 NAMED_SVG_COLORS = {
     "black": (0, 0, 0),
     "dimgray": (105, 105, 105),
@@ -1289,31 +1293,242 @@ def should_force_dark_foreground(color_value: str) -> bool:
     rgb = svg_color_to_rgb(color_value)
     if rgb is None:
         return False
+    return color_luminance(rgb) < 180
+
+
+def color_luminance(rgb: tuple[int, int, int]) -> float:
     red, green, blue = rgb
-    luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-    return luminance < 180
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def parse_style_properties(style_value: str) -> list[tuple[str, str] | str]:
+    properties: list[tuple[str, str] | str] = []
+    for declaration in style_value.split(";"):
+        if not declaration.strip():
+            continue
+        if ":" not in declaration:
+            properties.append(declaration)
+            continue
+        name, value = declaration.split(":", 1)
+        properties.append((name.strip(), value.strip()))
+    return properties
+
+
+def rebuild_style_properties(style_value: str, properties: list[tuple[str, str] | str]) -> str:
+    rendered: list[str] = []
+    for entry in properties:
+        if isinstance(entry, tuple):
+            rendered.append(f"{entry[0]}:{entry[1]}")
+        else:
+            rendered.append(entry)
+    rebuilt = ";".join(rendered)
+    if style_value.endswith(";") and rebuilt:
+        rebuilt += ";"
+    return rebuilt
+
+
+def get_style_property(style_value: str | None, property_name: str) -> str | None:
+    if not style_value:
+        return None
+    wanted = property_name.lower()
+    for entry in parse_style_properties(style_value):
+        if isinstance(entry, tuple) and entry[0].lower() == wanted:
+            return entry[1]
+    return None
+
+
+def set_style_property(style_value: str, property_name: str, next_value: str) -> str:
+    wanted = property_name.lower()
+    properties = parse_style_properties(style_value)
+    replaced = False
+    updated: list[tuple[str, str] | str] = []
+    for entry in properties:
+        if isinstance(entry, tuple) and entry[0].lower() == wanted:
+            updated.append((entry[0], next_value))
+            replaced = True
+            continue
+        updated.append(entry)
+    if not replaced:
+        updated.append((property_name, next_value))
+    return rebuild_style_properties(style_value, updated)
+
+
+def svg_local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def extract_svg_fragment(svg_content: str) -> str | None:
+    start = svg_content.find("<svg")
+    end = svg_content.rfind("</svg>")
+    if start == -1 or end == -1:
+        return None
+    return svg_content[start : end + len("</svg>")]
+
+
+def parse_svg_number(value: str | None) -> float | None:
+    if value is None:
+        return None
+    match = SVG_NUMBER_RE.search(value)
+    if not match:
+        return None
+    return float(match.group(0))
+
+
+def parse_svg_points(points_value: str | None) -> tuple[tuple[float, float], ...]:
+    if not points_value:
+        return ()
+    numbers = [float(value) for value in SVG_NUMBER_RE.findall(points_value)]
+    if len(numbers) < 6 or len(numbers) % 2:
+        return ()
+    return tuple((numbers[index], numbers[index + 1]) for index in range(0, len(numbers), 2))
+
+
+def point_in_polygon(x: float, y: float, points: tuple[tuple[float, float], ...]) -> bool:
+    inside = False
+    previous_x, previous_y = points[-1]
+    for current_x, current_y in points:
+        if (current_y > y) != (previous_y > y):
+            slope = (previous_x - current_x) / (previous_y - current_y)
+            boundary_x = slope * (y - current_y) + current_x
+            if x <= boundary_x:
+                inside = not inside
+        previous_x, previous_y = current_x, current_y
+    return inside
+
+
+def svg_paint_value(element: ET.Element, property_name: str) -> str | None:
+    direct = element.get(property_name)
+    if direct:
+        return direct.strip()
+    return get_style_property(element.get("style"), property_name)
+
+
+def svg_paint_is_light(paint_value: str, light_gradients: dict[str, bool]) -> bool:
+    normalized = paint_value.strip()
+    rgb = svg_color_to_rgb(normalized)
+    if rgb is not None:
+        return color_luminance(rgb) >= 180
+    gradient_match = SVG_FILL_URL_RE.fullmatch(normalized)
+    if gradient_match:
+        return light_gradients.get(gradient_match.group("id"), False)
+    return False
+
+
+def collect_light_gradient_fills(root: ET.Element) -> dict[str, bool]:
+    gradients: dict[str, bool] = {}
+    for element in root.iter():
+        if svg_local_name(element.tag) not in {"linearGradient", "radialGradient"}:
+            continue
+        gradient_id = element.get("id")
+        if not gradient_id:
+            continue
+        stop_luminances: list[float] = []
+        for child in element:
+            if svg_local_name(child.tag) != "stop":
+                continue
+            stop_color = child.get("stop-color") or get_style_property(child.get("style"), "stop-color")
+            rgb = svg_color_to_rgb(stop_color or "")
+            if rgb is not None:
+                stop_luminances.append(color_luminance(rgb))
+        if stop_luminances:
+            gradients[gradient_id] = (sum(stop_luminances) / len(stop_luminances)) >= 180
+    return gradients
+
+
+def light_shape_contains_point(element: ET.Element, x: float, y: float) -> bool:
+    tag = svg_local_name(element.tag)
+    if tag == "rect":
+        left = parse_svg_number(element.get("x")) or 0.0
+        top = parse_svg_number(element.get("y")) or 0.0
+        width = parse_svg_number(element.get("width"))
+        height = parse_svg_number(element.get("height"))
+        if width is None or height is None:
+            return False
+        return left <= x <= left + width and top <= y <= top + height
+
+    if tag == "polygon":
+        points = parse_svg_points(element.get("points"))
+        if not points:
+            return False
+        return point_in_polygon(x, y, points)
+
+    if tag == "circle":
+        center_x = parse_svg_number(element.get("cx"))
+        center_y = parse_svg_number(element.get("cy"))
+        radius = parse_svg_number(element.get("r"))
+        if center_x is None or center_y is None or radius is None:
+            return False
+        return ((x - center_x) ** 2 + (y - center_y) ** 2) <= radius**2
+
+    if tag == "ellipse":
+        center_x = parse_svg_number(element.get("cx"))
+        center_y = parse_svg_number(element.get("cy"))
+        radius_x = parse_svg_number(element.get("rx"))
+        radius_y = parse_svg_number(element.get("ry"))
+        if center_x is None or center_y is None or radius_x in {None, 0.0} or radius_y in {None, 0.0}:
+            return False
+        return (((x - center_x) / radius_x) ** 2 + ((y - center_y) / radius_y) ** 2) <= 1
+
+    return False
+
+
+def collect_text_fill_protection(svg_content: str) -> dict[int, str]:
+    svg_fragment = extract_svg_fragment(svg_content)
+    if not svg_fragment:
+        return {}
+    try:
+        root = ET.fromstring(svg_fragment)
+    except ET.ParseError:
+        return {}
+
+    light_gradients = collect_light_gradient_fills(root)
+    light_shapes: list[ET.Element] = []
+    protected_texts: dict[int, str] = {}
+    text_index = 0
+
+    for element in root.iter():
+        tag = svg_local_name(element.tag)
+        if tag in {"rect", "polygon", "circle", "ellipse"}:
+            fill_value = svg_paint_value(element, "fill")
+            if fill_value and svg_paint_is_light(fill_value, light_gradients):
+                light_shapes.append(element)
+            continue
+
+        if tag != "text":
+            continue
+
+        fill_value = svg_paint_value(element, "fill")
+        if not fill_value or not should_force_dark_foreground(fill_value):
+            text_index += 1
+            continue
+
+        text_x = parse_svg_number(element.get("x"))
+        text_y = parse_svg_number(element.get("y"))
+        if text_x is not None and text_y is not None:
+            if any(light_shape_contains_point(shape, text_x, text_y) for shape in light_shapes):
+                protected_texts[text_index] = fill_value
+        text_index += 1
+
+    return protected_texts
 
 
 def force_dark_svg_foreground(svg_content: str) -> str:
+    protected_texts = collect_text_fill_protection(svg_content)
+
     def replace_style(match: re.Match[str]) -> str:
         style = match.group("style")
-        properties: list[str] = []
-        for declaration in style.split(";"):
-            if not declaration.strip():
+        properties: list[tuple[str, str] | str] = []
+        for entry in parse_style_properties(style):
+            if not isinstance(entry, tuple):
+                properties.append(entry)
                 continue
-            if ":" not in declaration:
-                properties.append(declaration)
-                continue
-            name, value = declaration.split(":", 1)
-            prop = name.strip().lower()
-            next_value = value.strip()
+            name, next_value = entry
+            prop = name.lower()
             if prop in {"fill", "stroke"} and should_force_dark_foreground(next_value):
                 next_value = DARK_MODE_FOREGROUND
-            properties.append(f"{name.strip()}:{next_value}")
+            properties.append((name, next_value))
 
-        rebuilt = ";".join(properties)
-        if style.endswith(";") and rebuilt:
-            rebuilt += ";"
+        rebuilt = rebuild_style_properties(style, properties)
         return f'{match.group("prefix")}{rebuilt}{match.group("suffix")}'
 
     def replace_attr(match: re.Match[str]) -> str:
@@ -1322,8 +1537,48 @@ def force_dark_svg_foreground(svg_content: str) -> str:
             value = DARK_MODE_FOREGROUND
         return f'{match.group("prefix")}{value}{match.group("suffix")}'
 
-    svg_content = SVG_STYLE_ATTR_RE.sub(replace_style, svg_content)
-    return SVG_PRESENTATION_ATTR_RE.sub(replace_attr, svg_content)
+    normalized = SVG_STYLE_ATTR_RE.sub(replace_style, svg_content)
+    normalized = SVG_PRESENTATION_ATTR_RE.sub(replace_attr, normalized)
+
+    if not protected_texts:
+        return normalized
+
+    text_index = 0
+
+    def restore_protected_text(match: re.Match[str]) -> str:
+        nonlocal text_index
+        attrs = match.group("attrs")
+        original_fill = protected_texts.get(text_index)
+        text_index += 1
+        if not original_fill:
+            return match.group(0)
+
+        text_fill_match = SVG_PRESENTATION_ATTR_RE.search(attrs)
+        if text_fill_match and text_fill_match.group("prefix").lower().startswith('fill'):
+            restored_attrs = SVG_PRESENTATION_ATTR_RE.sub(
+                lambda attr_match: (
+                    f'{attr_match.group("prefix")}{original_fill}{attr_match.group("suffix")}'
+                    if attr_match.group("prefix").lower().startswith('fill')
+                    else attr_match.group(0)
+                ),
+                attrs,
+                count=1,
+            )
+            return f"<text{restored_attrs}>"
+
+        style_match = SVG_STYLE_ATTR_RE.search(attrs)
+        if style_match and get_style_property(style_match.group("style"), "fill") is not None:
+            restored_style = set_style_property(style_match.group("style"), "fill", original_fill)
+            restored_attrs = (
+                attrs[: style_match.start()]
+                + f'{style_match.group("prefix")}{restored_style}{style_match.group("suffix")}'
+                + attrs[style_match.end() :]
+            )
+            return f"<text{restored_attrs}>"
+
+        return match.group(0)
+
+    return TEXT_TAG_RE.sub(restore_protected_text, normalized)
 
 
 def normalize_svg_for_dark_mode(svg_path: Path) -> None:

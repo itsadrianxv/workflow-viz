@@ -25,7 +25,7 @@ description: Use when Codex needs to decide whether code is expensive to underst
 !theme materia
 ```
 
-- 默认按暗色环境查看 SVG，前景文字和线条统一使用白色，避免插入深色文档后看不清。
+- 默认按暗色环境查看 SVG：无背景的文字和线条使用白色，浅色图形里的文字保留深色，避免白底白字看不清。
 - 文档以图为主。除开头和结尾允许少量引导文字外，其余文字都应紧贴在图的前后，用于解释图中内容。
 
 ## 三层模型

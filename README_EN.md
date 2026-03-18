@@ -130,7 +130,7 @@ Generic keywords inside diagrams are written in Chinese, while class names, meth
 
 ### 7. Dark-mode-friendly SVG output
 
-Rendered SVGs now assume a dark viewing environment by default and force a white foreground for text and linework, so charts stay readable after being embedded into dark documents.
+Rendered SVGs now assume a dark viewing environment by default: linework and free-floating labels are forced to white, while labels that sit on light-filled shapes stay dark so white panels do not lose contrast.
 
 ## Quick start
 
@@ -178,7 +178,7 @@ python scripts/workflow_viz.py generate --repo-root <repo> --theme none --render
 - PlantUML runtime preflight checks
 - multi-language static hotspot detection
 - architecture-first default diagram packs
-- Chinese in-diagram labels, preserved code names, and white foreground dark-mode SVG output
+- Chinese in-diagram labels, preserved code names, and dark-mode SVG output that keeps free-floating labels white and labels on light-filled shapes dark
 - cleanup for legacy single-`architecture` outputs
 
 ## Why this is worth using in open source

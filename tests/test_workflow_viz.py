@@ -261,21 +261,41 @@ class WorkflowVizTests(unittest.TestCase):
             self.assertFalse((insights_dir / f"{slug}.md").exists())
             self.assertTrue((insights_dir / "notes.md").exists())
 
-    def test_force_dark_svg_foreground_recolors_dark_text_and_strokes(self):
+    def test_force_dark_svg_foreground_keeps_text_on_light_shapes_dark(self):
         svg = (
-            '<svg>'
-            '<text fill="#222222">handle_request()</text>'
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<rect fill="#FEFECE" stroke="#181818" x="0" y="0" width="120" height="40" />'
+            '<text fill="#222222" x="12" y="24">inside_box</text>'
+            '<text fill="#222222" x="12" y="84">between_boxes</text>'
             '<path style="stroke:#333333;fill:none;" />'
-            '<rect fill="#FEFECE" stroke="#181818" />'
             "</svg>"
         )
 
         normalized = workflow_viz.force_dark_svg_foreground(svg)
 
-        self.assertIn('fill="#FFFFFF">handle_request()</text>', normalized)
+        self.assertIn('fill="#222222" x="12" y="24">inside_box</text>', normalized)
+        self.assertIn('fill="#FFFFFF" x="12" y="84">between_boxes</text>', normalized)
         self.assertIn('style="stroke:#FFFFFF;fill:none;"', normalized)
         self.assertIn('fill="#FEFECE"', normalized)
         self.assertIn('stroke="#FFFFFF"', normalized)
+
+    def test_force_dark_svg_foreground_treats_light_gradients_as_text_background(self):
+        svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<defs>'
+            '<linearGradient id="light-fill" x1="50%" x2="50%" y1="0%" y2="100%">'
+            '<stop offset="0%" stop-color="#FFFFFF" />'
+            '<stop offset="100%" stop-color="#F8F8F8" />'
+            "</linearGradient>"
+            "</defs>"
+            '<polygon fill="url(#light-fill)" points="0,0 120,0 120,50 0,50" />'
+            '<text fill="#222222" x="16" y="28">gradient_box</text>'
+            "</svg>"
+        )
+
+        normalized = workflow_viz.force_dark_svg_foreground(svg)
+
+        self.assertIn('fill="#222222" x="16" y="28">gradient_box</text>', normalized)
 
     def test_documentation_files_describe_grouped_markdown_defaults(self):
         skill = (REPO_ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -307,7 +327,9 @@ class WorkflowVizTests(unittest.TestCase):
         self.assertIn("insights/<group>/", readme_en)
         self.assertIn("../../charts/<slug>-architecture-context.svg", template)
         self.assertNotIn("](../charts/<slug>-architecture-context.svg)", template)
-        self.assertIn("white foreground", readme_en)
+        self.assertIn("free-floating labels white", readme_en)
+        self.assertIn("light-filled shapes stay dark", readme_en)
+        self.assertIn("浅色图形里的文字保留深色", skill)
         self.assertIn("architecture-context", selection)
         self.assertIn("architecture-modules", selection)
         self.assertIn("architecture-dependencies", selection)
