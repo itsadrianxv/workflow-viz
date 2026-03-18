@@ -317,6 +317,24 @@ class AnalysisResult:
 
 
 @dataclass
+class MarkdownOutputItem:
+    result: AnalysisResult
+    slug: str
+    markdown_name: str
+
+
+@dataclass
+class MarkdownOutputGroup:
+    directory_name: str
+    items: list[MarkdownOutputItem]
+
+
+@dataclass
+class MarkdownOutputPlan:
+    groups: list[MarkdownOutputGroup]
+
+
+@dataclass
 class PlantUMLRuntime:
     mode: str
     command: str | None = None
@@ -1060,6 +1078,140 @@ def slug_for_path(relative_path: Path) -> str:
     return f"{base}-{digest}" if base else digest
 
 
+ROOT_LIKE_DIR_NAMES = {
+    "src",
+    "lib",
+    "app",
+    "apps",
+    "pkg",
+    "packages",
+    "internal",
+    "cmd",
+    "server",
+    "client",
+}
+
+GENERIC_FILE_STEMS = {
+    "index",
+    "main",
+    "utils",
+    "types",
+    "__init__",
+    "mod",
+}
+
+
+def slugify_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+
+def meaningful_parent_parts(relative_path: Path) -> list[str]:
+    parts: list[str] = []
+    for part in relative_path.parent.parts:
+        if part in ("", "."):
+            continue
+        normalized = slugify_name(part)
+        if not normalized or normalized in ROOT_LIKE_DIR_NAMES:
+            continue
+        parts.append(normalized)
+    return parts
+
+
+def semantic_file_stem(relative_path: Path) -> str:
+    stem = slugify_name(relative_path.stem)
+    if stem and stem not in GENERIC_FILE_STEMS:
+        return stem
+
+    parent_parts = meaningful_parent_parts(relative_path)
+    if parent_parts and stem:
+        return f"{parent_parts[-1]}-{stem}"
+    if parent_parts:
+        return parent_parts[-1]
+    return stem or slugify_name(relative_path.name)
+
+
+def single_file_group_name(relative_path: Path) -> str:
+    stem = semantic_file_stem(relative_path)
+    parent_parts = meaningful_parent_parts(relative_path)
+    if parent_parts and stem and stem != parent_parts[-1]:
+        return f"{parent_parts[-1]}-{stem}" if not stem.startswith(f"{parent_parts[-1]}-") else stem
+    return stem or slug_for_path(relative_path)
+
+
+def shared_group_key(relative_path: Path) -> str | None:
+    parent_parts = meaningful_parent_parts(relative_path)
+    if not parent_parts:
+        return None
+    return parent_parts[-1]
+
+
+def unique_group_markdown_name(relative_path: Path, used_names: set[str]) -> str:
+    candidates: list[str] = []
+    parts = [slugify_name(part) for part in relative_path.with_suffix("").parts if slugify_name(part)]
+    if parts:
+        candidates.append(parts[-1])
+        for width in range(2, len(parts) + 1):
+            candidates.append("-".join(parts[-width:]))
+    fallback = semantic_file_stem(relative_path) or slug_for_path(relative_path)
+    candidates.append(fallback)
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        filename = f"{candidate}.md"
+        if filename not in used_names:
+            used_names.add(filename)
+            return filename
+
+    filename = f"{fallback}.md"
+    used_names.add(filename)
+    return filename
+
+
+def plan_markdown_outputs(results: Sequence[AnalysisResult]) -> MarkdownOutputPlan:
+    selected = [result for result in results if result.selected]
+    if not selected:
+        return MarkdownOutputPlan(groups=[])
+
+    clusters: dict[tuple[str, str], list[AnalysisResult]] = {}
+    for result in selected:
+        relative_path = result.metrics.relative_path
+        shared_key = shared_group_key(relative_path)
+        if shared_key:
+            cluster_key = ("shared", shared_key)
+        else:
+            cluster_key = ("single", relative_path.as_posix())
+        clusters.setdefault(cluster_key, []).append(result)
+
+    total_items = len(selected)
+    groups: list[MarkdownOutputGroup] = []
+    for (cluster_type, cluster_value), cluster_items in clusters.items():
+        if cluster_type == "shared" and len(cluster_items) > 1:
+            directory_name = cluster_value
+        else:
+            directory_name = single_file_group_name(cluster_items[0].metrics.relative_path)
+
+        used_names: set[str] = set()
+        items: list[MarkdownOutputItem] = []
+        for result in cluster_items:
+            if total_items == 1:
+                markdown_name = "analysis.md"
+            elif len(cluster_items) == 1:
+                markdown_name = f"{directory_name}.md"
+            else:
+                markdown_name = unique_group_markdown_name(result.metrics.relative_path, used_names)
+            items.append(
+                MarkdownOutputItem(
+                    result=result,
+                    slug=slug_for_path(result.metrics.relative_path),
+                    markdown_name=markdown_name,
+                )
+            )
+        groups.append(MarkdownOutputGroup(directory_name=directory_name, items=items))
+
+    return MarkdownOutputPlan(groups=groups)
+
+
 def chart_title(diagram_key: str) -> str:
     return CHART_TITLES[diagram_key]
 
@@ -1217,7 +1369,18 @@ def cleanup_nested_output_artifacts(slug: str, insights_dir: Path, diagram_keys:
         nested_charts_dir.rmdir()
 
 
-def build_markdown(result: AnalysisResult, slug: str) -> str:
+def cleanup_legacy_markdown_artifacts(insights_dir: Path, results: Sequence[AnalysisResult]) -> None:
+    legacy_index = insights_dir / "index.md"
+    if legacy_index.exists():
+        legacy_index.unlink()
+
+    for result in results:
+        legacy_markdown = insights_dir / f"{slug_for_path(result.metrics.relative_path)}.md"
+        if legacy_markdown.exists():
+            legacy_markdown.unlink()
+
+
+def build_markdown(result: AnalysisResult, slug: str, chart_rel_dir: str = "../charts") -> str:
     reasons = result.strong_signals or result.medium_signals or ["用户显式指定"]
     highlights = "；".join(reasons[:3])
 
@@ -1227,7 +1390,7 @@ def build_markdown(result: AnalysisResult, slug: str) -> str:
             "",
             chart_intro(diagram_key),
             "",
-            f"![{chart_title(diagram_key)}](../charts/{slug}-{diagram_key}.svg)",
+            f"![{chart_title(diagram_key)}]({chart_rel_dir}/{slug}-{diagram_key}.svg)",
             "",
             chart_outro(diagram_key),
             "",
@@ -1486,11 +1649,13 @@ def generate_docs(
         print("没有可生成文档的热点文件。")
         return 1
 
+    markdown_plan = plan_markdown_outputs(selected)
     output_root, insights_dir, code_dir, charts_dir = resolve_output_layout(docs_root)
     output_root.mkdir(parents=True, exist_ok=True)
     insights_dir.mkdir(parents=True, exist_ok=True)
     code_dir.mkdir(parents=True, exist_ok=True)
     charts_dir.mkdir(parents=True, exist_ok=True)
+    cleanup_legacy_markdown_artifacts(insights_dir, selected)
 
     runtime: PlantUMLRuntime | None = None
     if render:
@@ -1499,18 +1664,19 @@ def generate_docs(
             print("请求渲染 SVG，但未找到可用的 PlantUML 运行时。请先执行 doctor。")
             return 1
 
-    for result in selected:
-        slug = slug_for_path(result.metrics.relative_path)
-        cleanup_legacy_architecture_artifacts(slug, code_dir, charts_dir)
-        cleanup_nested_output_artifacts(slug, insights_dir, result.recommended_diagrams)
-        write_if_changed(insights_dir / f"{slug}.md", build_markdown(result, slug))
-        for diagram_key in result.recommended_diagrams:
-            plantuml_path = code_dir / f"{slug}-{diagram_key}.puml"
-            write_if_changed(plantuml_path, build_plantuml(result, diagram_key, theme=theme))
-            if render and runtime is not None:
-                runtime.render(plantuml_path, charts_dir)
-
-    write_if_changed(insights_dir / "index.md", build_index(selected))
+    for group in markdown_plan.groups:
+        group_dir = insights_dir / group.directory_name
+        for item in group.items:
+            result = item.result
+            slug = item.slug
+            cleanup_legacy_architecture_artifacts(slug, code_dir, charts_dir)
+            cleanup_nested_output_artifacts(slug, insights_dir, result.recommended_diagrams)
+            write_if_changed(group_dir / item.markdown_name, build_markdown(result, slug, "../../charts"))
+            for diagram_key in result.recommended_diagrams:
+                plantuml_path = code_dir / f"{slug}-{diagram_key}.puml"
+                write_if_changed(plantuml_path, build_plantuml(result, diagram_key, theme=theme))
+                if render and runtime is not None:
+                    runtime.render(plantuml_path, charts_dir)
     print(f"已在 {output_root} 下生成 {len(selected)} 个热点文件的洞察文档。")
     return 0
 

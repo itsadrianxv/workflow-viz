@@ -44,10 +44,15 @@ Once generation starts, it produces:
 Default output location:
 
 ```text
-docs/workflow-viz/insights/
+docs/workflow-viz/insights/<group>/analysis.md
+docs/workflow-viz/insights/<group>/<file>.md
 docs/workflow-viz/code/
 docs/workflow-viz/charts/
 ```
+
+- Single-file runs write only `analysis.md`
+- Multi-file runs first decide runtime groups, then write one Markdown file per source file inside each group directory
+- No `index.md` or other overview Markdown page is generated
 
 ## What makes it different
 
@@ -168,7 +173,8 @@ python scripts/workflow_viz.py generate --repo-root <repo> --theme none --render
 ## What the current version already includes
 
 - `doctor / scan / generate` core commands
-- default output under `docs/workflow-viz/{insights,code,charts}`
+- default output under `docs/workflow-viz/{insights,code,charts}`, with Markdown grouped under `insights/<group>/`
+- single-file runs write `analysis.md`; multi-file runs write one semantic Markdown filename per source file
 - PlantUML runtime preflight checks
 - multi-language static hotspot detection
 - architecture-first default diagram packs

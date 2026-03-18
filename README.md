@@ -44,10 +44,15 @@
 默认产物目录：
 
 ```text
-docs/workflow-viz/insights/
+docs/workflow-viz/insights/<group>/analysis.md
+docs/workflow-viz/insights/<group>/<file>.md
 docs/workflow-viz/code/
 docs/workflow-viz/charts/
 ```
+
+- 鍗曟枃浠舵壒娆″彧鐢熸垚 `analysis.md`
+- 澶氭枃浠舵壒娆′細鍏堟寜鐜板満鍒嗘瀽鍐冲畾鍒嗙粍锛屽啀鍦ㄦ瘡涓瓙鐩綍涓轰笉鍚屾枃浠剁敓鎴愬悇鑷?Markdown
+- 涓嶅啀鐢熸垚 `index.md` 鎴栧叾浠栧璇诲瀷 Markdown
 
 ## 这个 skill 的特点
 

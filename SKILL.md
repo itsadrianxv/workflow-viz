@@ -137,8 +137,8 @@ python scripts/workflow_viz.py generate --repo-root <repo> --theme none --render
 
 默认输出到目标仓库：
 
-- `docs/workflow-viz/insights/index.md`
-- `docs/workflow-viz/insights/<slug>.md`
+- `docs/workflow-viz/insights/<group>/analysis.md`锛氬彧鍦ㄦ湰杞彧鏈?1 涓?Markdown 鏃朵娇鐢?
+- `docs/workflow-viz/insights/<group>/<file>.md`锛氬鏂囦欢鎵规涓嬫寜鏂囦欢鍚勮嚜鐢熸垚锛屼笉鍐嶇敓鎴?index.md`
 - `docs/workflow-viz/code/<slug>-<diagram>.puml`
 - `docs/workflow-viz/charts/<slug>-<diagram>.svg`
 
