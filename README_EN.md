@@ -119,6 +119,14 @@ That makes them much more useful for:
 - AI-generated code handoff
 - long-term maintenance
 
+### 6. Chinese keywords, code names unchanged
+
+Generic keywords inside diagrams are written in Chinese, while class names, method names, function names, and file names keep their original code naming without translation or style changes.
+
+### 7. Dark-mode-friendly SVG output
+
+Rendered SVGs now assume a dark viewing environment by default and force a white foreground for text and linework, so charts stay readable after being embedded into dark documents.
+
 ## Quick start
 
 ### 1. Check the rendering environment
@@ -164,7 +172,7 @@ python scripts/workflow_viz.py generate --repo-root <repo> --theme none --render
 - PlantUML runtime preflight checks
 - multi-language static hotspot detection
 - architecture-first default diagram packs
-- Chinese in-diagram labels and image-first doc templates
+- Chinese in-diagram labels, preserved code names, and white foreground dark-mode SVG output
 - cleanup for legacy single-`architecture` outputs
 
 ## Why this is worth using in open source

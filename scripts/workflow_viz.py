@@ -20,6 +20,7 @@ DEFAULT_DOCS_ROOT = Path("docs/workflow-viz")
 DEFAULT_TOP = 5
 DEFAULT_THEME = "materia"
 MAX_FILE_BYTES = 350_000
+DARK_MODE_FOREGROUND = "#FFFFFF"
 
 ARCHITECTURE_DIAGRAMS = [
     "architecture-context",
@@ -156,6 +157,26 @@ DATA_FLOW_RE = re.compile(
     r"aggregate|collect|normalize|convert|emit|publish)\b",
     re.IGNORECASE,
 )
+SVG_STYLE_ATTR_RE = re.compile(r'(?P<prefix>\bstyle=")(?P<style>[^"]*)(?P<suffix>")')
+SVG_PRESENTATION_ATTR_RE = re.compile(
+    r'(?P<prefix>\b(?:fill|stroke)\b=")(?P<value>[^"]+)(?P<suffix>")',
+    re.IGNORECASE,
+)
+HEX_COLOR_RE = re.compile(r"#(?P<hex>[0-9a-f]{3}|[0-9a-f]{6})\Z", re.IGNORECASE)
+RGB_COLOR_RE = re.compile(
+    r"rgba?\(\s*(?P<red>\d{1,3})\s*,\s*(?P<green>\d{1,3})\s*,\s*(?P<blue>\d{1,3})"
+    r"(?:\s*,\s*(?P<alpha>\d*\.?\d+))?\s*\)\Z",
+    re.IGNORECASE,
+)
+NAMED_SVG_COLORS = {
+    "black": (0, 0, 0),
+    "dimgray": (105, 105, 105),
+    "dimgrey": (105, 105, 105),
+    "gray": (128, 128, 128),
+    "grey": (128, 128, 128),
+    "darkgray": (169, 169, 169),
+    "darkgrey": (169, 169, 169),
+}
 
 ASYNC_CATEGORY_PATTERNS = {
     "async-await": (
@@ -330,13 +351,17 @@ class PlantUMLRuntime:
                 capture_output=True,
                 text=True,
             )
-            return
-        subprocess.run(
-            ["java", "-jar", str(self.jar_path), "-tsvg", "-o", str(output_dir), str(source_file)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        else:
+            subprocess.run(
+                ["java", "-jar", str(self.jar_path), "-tsvg", "-o", str(output_dir), str(source_file)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        rendered_svg = output_dir / f"{source_file.stem}.svg"
+        if rendered_svg.exists():
+            normalize_svg_for_dark_mode(rendered_svg)
 
 
 class PythonFunctionAnalyzer(ast.NodeVisitor):
@@ -1053,6 +1078,109 @@ def emit_theme(theme: str) -> str:
     return f"!theme {theme}\n"
 
 
+def emit_dark_mode_skinparams() -> str:
+    return (
+        f"skinparam defaultFontColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam ArrowColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam LineColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam PackageBorderColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam RectangleBorderColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam ComponentBorderColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam SequenceArrowColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam SequenceLifeLineBorderColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam SequenceParticipantBorderColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam SequenceParticipantFontColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam ActivityBorderColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam ActivityFontColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam ActivityDiamondBorderColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam ActivityDiamondFontColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam StateBorderColor {DARK_MODE_FOREGROUND}\n"
+        f"skinparam StateFontColor {DARK_MODE_FOREGROUND}\n"
+    )
+
+
+def entrypoint_code_name(result: AnalysisResult) -> str:
+    return result.metrics.entrypoint.strip() or result.metrics.relative_path.stem
+
+
+def keyword_with_code_name(keyword: str, code_name: str) -> str:
+    return f"{keyword} {code_name}".strip()
+
+
+def svg_color_to_rgb(color_value: str) -> tuple[int, int, int] | None:
+    normalized = color_value.strip().lower()
+    if not normalized or normalized in {"none", "transparent", "currentcolor", "inherit", "initial", "unset"}:
+        return None
+    if normalized.startswith("url("):
+        return None
+    if normalized in NAMED_SVG_COLORS:
+        return NAMED_SVG_COLORS[normalized]
+
+    hex_match = HEX_COLOR_RE.fullmatch(normalized)
+    if hex_match:
+        raw = hex_match.group("hex")
+        if len(raw) == 3:
+            raw = "".join(ch * 2 for ch in raw)
+        return tuple(int(raw[index : index + 2], 16) for index in range(0, 6, 2))
+
+    rgb_match = RGB_COLOR_RE.fullmatch(normalized)
+    if rgb_match:
+        alpha = rgb_match.group("alpha")
+        if alpha is not None and float(alpha) <= 0:
+            return None
+        return tuple(int(rgb_match.group(channel)) for channel in ("red", "green", "blue"))
+
+    return None
+
+
+def should_force_dark_foreground(color_value: str) -> bool:
+    rgb = svg_color_to_rgb(color_value)
+    if rgb is None:
+        return False
+    red, green, blue = rgb
+    luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    return luminance < 180
+
+
+def force_dark_svg_foreground(svg_content: str) -> str:
+    def replace_style(match: re.Match[str]) -> str:
+        style = match.group("style")
+        properties: list[str] = []
+        for declaration in style.split(";"):
+            if not declaration.strip():
+                continue
+            if ":" not in declaration:
+                properties.append(declaration)
+                continue
+            name, value = declaration.split(":", 1)
+            prop = name.strip().lower()
+            next_value = value.strip()
+            if prop in {"fill", "stroke"} and should_force_dark_foreground(next_value):
+                next_value = DARK_MODE_FOREGROUND
+            properties.append(f"{name.strip()}:{next_value}")
+
+        rebuilt = ";".join(properties)
+        if style.endswith(";") and rebuilt:
+            rebuilt += ";"
+        return f'{match.group("prefix")}{rebuilt}{match.group("suffix")}'
+
+    def replace_attr(match: re.Match[str]) -> str:
+        value = match.group("value")
+        if should_force_dark_foreground(value):
+            value = DARK_MODE_FOREGROUND
+        return f'{match.group("prefix")}{value}{match.group("suffix")}'
+
+    svg_content = SVG_STYLE_ATTR_RE.sub(replace_style, svg_content)
+    return SVG_PRESENTATION_ATTR_RE.sub(replace_attr, svg_content)
+
+
+def normalize_svg_for_dark_mode(svg_path: Path) -> None:
+    original = svg_path.read_text(encoding="utf-8")
+    normalized = force_dark_svg_foreground(original)
+    if normalized != original:
+        svg_path.write_text(normalized, encoding="utf-8")
+
+
 def write_if_changed(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.read_text(encoding="utf-8") == content:
@@ -1147,16 +1275,17 @@ def build_markdown(result: AnalysisResult, slug: str) -> str:
 
 
 def build_plantuml(result: AnalysisResult, diagram_key: str, theme: str = DEFAULT_THEME) -> str:
-    del result
+    entrypoint = entrypoint_code_name(result)
     title = chart_title(diagram_key)
-    header = f"@startuml\n{emit_theme(theme)}title {title}\n"
+    header = f"@startuml\n{emit_theme(theme)}{emit_dark_mode_skinparams()}title {title}\n"
 
     if diagram_key == "architecture-context":
-        return header + """skinparam shadowing false
+        entrypoint_label = keyword_with_code_name("入口函数", entrypoint)
+        return header + f"""skinparam shadowing false
 skinparam componentStyle rectangle
 
 rectangle "外部调用方" as caller
-rectangle "热点文件入口" as entrypoint
+rectangle "{entrypoint_label}" as entrypoint
 rectangle "上游上下文" as upstream
 rectangle "下游协作者" as downstream
 rectangle "外部资源" as external
@@ -1170,15 +1299,16 @@ entrypoint --> caller : 返回结果
 """
 
     if diagram_key == "architecture-modules":
-        return header + """skinparam shadowing false
+        entry_component = keyword_with_code_name("入口协调", entrypoint)
+        return header + f"""skinparam shadowing false
 skinparam componentStyle rectangle
 
-package "热点文件内部模块" {
-  component "入口协调层" as entry
+package "热点文件内部模块" {{
+  component "{entry_component}" as entry
   component "规则判定层" as rules
   component "协作编排层" as orchestration
   component "结果收束层" as result
-}
+}}
 
 entry --> rules : 读取输入
 rules --> orchestration : 选择路径
@@ -1188,10 +1318,11 @@ result --> entry : 回传结论
 """
 
     if diagram_key == "architecture-dependencies":
-        return header + """skinparam shadowing false
+        entry_label = keyword_with_code_name("主入口", entrypoint)
+        return header + f"""skinparam shadowing false
 skinparam componentStyle rectangle
 
-rectangle "主入口" as entry
+rectangle "{entry_label}" as entry
 rectangle "输入校验依赖" as validate
 rectangle "流程编排依赖" as orchestrate
 rectangle "状态记录依赖" as state
@@ -1207,8 +1338,8 @@ output --> entry : 返回结果
 """
 
     if diagram_key == "activity":
-        return header + """start
-:进入主入口;
+        return header + f"""start
+:进入入口 {entrypoint};
 :准备输入与上下文;
 :执行主流程编排;
 if (是否命中关键分支?) then (是)
@@ -1222,10 +1353,11 @@ stop
 """
 
     if diagram_key == "sequence":
-        return header + """autonumber
+        entry_label = keyword_with_code_name("入口函数", entrypoint)
+        return header + f"""autonumber
 
 actor "发起方" as Caller
-participant "热点文件入口" as Entry
+participant "{entry_label}" as Entry
 participant "关键协作者甲" as DepA
 participant "关键协作者乙" as DepB
 
@@ -1239,8 +1371,8 @@ Entry --> Caller : 返回完成结果
 """
 
     if diagram_key == "branch-decision":
-        return header + """start
-:进入判定入口;
+        return header + f"""start
+:进入判定入口 {entrypoint};
 if (是否满足主守卫条件?) then (满足)
   :执行主分支;
 elseif (是否满足降级条件?)
@@ -1263,10 +1395,11 @@ stop
 """
 
     if diagram_key == "async-concurrency":
-        return header + """autonumber
+        workflow_label = keyword_with_code_name("入口函数", entrypoint)
+        return header + f"""autonumber
 
 participant "触发方" as Trigger
-participant "热点文件入口" as Workflow
+participant "{workflow_label}" as Workflow
 participant "异步执行单元" as Worker
 
 Trigger -> Workflow : 发起异步任务
@@ -1281,10 +1414,11 @@ deactivate Workflow
 """
 
     if diagram_key == "data-flow":
-        return header + """skinparam shadowing false
+        core_label = keyword_with_code_name("入口处理", entrypoint)
+        return header + f"""skinparam shadowing false
 
 rectangle "输入数据" as Input
-rectangle "入口处理" as Core
+rectangle "{core_label}" as Core
 rectangle "中间变换" as Mid
 rectangle "输出结果" as Output
 

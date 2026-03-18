@@ -84,12 +84,14 @@ class WorkflowVizTests(unittest.TestCase):
         self.assertTrue(architecture.startswith("@startuml\n!theme materia\n"))
         self.assertIn("架构总览图", architecture)
         self.assertIn("外部调用方", architecture)
+        self.assertIn("handle_request", architecture)
         self.assertNotIn("TODO collaborator", architecture)
         self.assertNotIn("coordinates", architecture)
 
         self.assertTrue(sequence.startswith("@startuml\n!theme materia\n"))
         self.assertIn("协作顺序图", sequence)
         self.assertIn("发起方", sequence)
+        self.assertIn("handle_request", sequence)
         self.assertNotIn("invoke", sequence)
         self.assertNotIn("complete", sequence)
 
@@ -102,6 +104,15 @@ class WorkflowVizTests(unittest.TestCase):
         self.assertTrue(custom.startswith("@startuml\n!theme plain\n"))
         self.assertTrue(disabled.startswith("@startuml\n"))
         self.assertNotIn("!theme", disabled)
+
+    def test_build_plantuml_injects_dark_mode_foreground_skinparams(self):
+        result = make_result()
+
+        activity = workflow_viz.build_plantuml(result, "activity", theme="materia")
+
+        self.assertIn("skinparam defaultFontColor #FFFFFF", activity)
+        self.assertIn("skinparam ArrowColor #FFFFFF", activity)
+        self.assertIn("skinparam LineColor #FFFFFF", activity)
 
     def test_build_markdown_is_image_first_and_architecture_focused(self):
         result = make_result()
@@ -156,6 +167,22 @@ class WorkflowVizTests(unittest.TestCase):
             self.assertFalse((insights_dir / "code").exists())
             self.assertFalse((insights_dir / "charts").exists())
 
+    def test_force_dark_svg_foreground_recolors_dark_text_and_strokes(self):
+        svg = (
+            '<svg>'
+            '<text fill="#222222">handle_request()</text>'
+            '<path style="stroke:#333333;fill:none;" />'
+            '<rect fill="#FEFECE" stroke="#181818" />'
+            "</svg>"
+        )
+
+        normalized = workflow_viz.force_dark_svg_foreground(svg)
+
+        self.assertIn('fill="#FFFFFF">handle_request()</text>', normalized)
+        self.assertIn('style="stroke:#FFFFFF;fill:none;"', normalized)
+        self.assertIn('fill="#FEFECE"', normalized)
+        self.assertIn('stroke="#FFFFFF"', normalized)
+
     def test_documentation_files_describe_new_defaults(self):
         skill = (REPO_ROOT / "SKILL.md").read_text(encoding="utf-8")
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
@@ -180,6 +207,12 @@ class WorkflowVizTests(unittest.TestCase):
         self.assertIn("图前说明", template)
         self.assertIn("图后解读", template)
         self.assertIn("../charts/<slug>-architecture-context.svg", template)
+        self.assertIn("专属名词保留代码命名", skill)
+        self.assertIn("暗色环境", skill)
+        self.assertIn("白色", skill)
+        self.assertIn("专属名词保留代码命名", readme)
+        self.assertIn("暗色环境", readme)
+        self.assertIn("white foreground", readme_en)
         self.assertNotIn("先给结论，再给图", template)
         self.assertIn("架构总览图", selection)
         self.assertIn("模块拆解图", selection)

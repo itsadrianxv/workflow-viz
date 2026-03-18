@@ -13,9 +13,10 @@ description: Use when Codex needs to decide whether code is expensive to underst
 
 ## 默认规则
 
-只要进入生成流程，就默认遵守这 4 条：
+只要进入生成流程，就默认遵守这 5 条：
 
 - PlantUML 图中的用户可见关键词必须用中文。
+- 图中的类名、方法名、函数名、文件名等专属名词保留代码命名，不要翻译或重写风格。
 - 架构图是默认重点，每个热点文件至少先生成 3 张：`architecture-context`、`architecture-modules`、`architecture-dependencies`。
 - 每个生成的 `.puml` 默认以以下头部开始，除非用户明确要求其他主题：
 
@@ -24,6 +25,7 @@ description: Use when Codex needs to decide whether code is expensive to underst
 !theme materia
 ```
 
+- 默认按暗色环境查看 SVG，前景文字和线条统一使用白色，避免插入深色文档后看不清。
 - 文档以图为主。除开头和结尾允许少量引导文字外，其余文字都应紧贴在图的前后，用于解释图中内容。
 
 ## 三层模型
