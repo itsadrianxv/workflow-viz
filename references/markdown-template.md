@@ -20,7 +20,7 @@
 
 图前说明：解释这张图要回答什么问题。
 
-![架构总览图](./charts/<slug>-architecture-context.svg)
+![架构总览图](../charts/<slug>-architecture-context.svg)
 
 图后解读：说明图中哪些角色、边界和关系需要优先补全。
 
@@ -28,7 +28,7 @@
 
 图前说明：解释内部模块如何帮助理解职责边界。
 
-![模块拆解图](./charts/<slug>-architecture-modules.svg)
+![模块拆解图](../charts/<slug>-architecture-modules.svg)
 
 图后解读：说明哪些模块容易混在一起、哪里需要保持分层。
 
@@ -36,7 +36,7 @@
 
 图前说明：解释依赖协作关系为什么值得单独看。
 
-![依赖职责图](./charts/<slug>-architecture-dependencies.svg)
+![依赖职责图](../charts/<slug>-architecture-dependencies.svg)
 
 图后解读：说明入口如何协调依赖，以及哪些依赖最关键。
 
@@ -46,7 +46,7 @@
 
 图前说明：提示读者按什么顺序读主流程。
 
-![主流程活动图](./charts/<slug>-activity.svg)
+![主流程活动图](../charts/<slug>-activity.svg)
 
 图后解读：补充主路径上的关键输入、条件和输出。
 
@@ -56,7 +56,7 @@
 
 图前说明：解释这张图想突出哪些协作时序。
 
-![协作顺序图](./charts/<slug>-sequence.svg)
+![协作顺序图](../charts/<slug>-sequence.svg)
 
 图后解读：补充谁先触发、谁后返回、哪里容易出错。
 

@@ -45,6 +45,8 @@
 
 ```text
 docs/workflow-viz/insights/
+docs/workflow-viz/code/
+docs/workflow-viz/charts/
 ```
 
 ## 这个 skill 的特点
@@ -158,7 +160,7 @@ python scripts/workflow_viz.py generate --repo-root <repo> --theme none --render
 ## 当前版本已经提供什么
 
 - `doctor / scan / generate` 三个核心命令
-- 默认输出到 `docs/workflow-viz/insights`
+- 默认输出到 `docs/workflow-viz/{insights,code,charts}`
 - PlantUML 渲染运行时预检
 - 面向多语言代码仓库的静态热点识别
 - 架构优先的默认图组

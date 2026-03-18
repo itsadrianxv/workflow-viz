@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Sequence
 
 
-DEFAULT_DOCS_ROOT = Path("docs/workflow-viz/insights")
+DEFAULT_DOCS_ROOT = Path("docs/workflow-viz")
 DEFAULT_TOP = 5
 DEFAULT_THEME = "materia"
 MAX_FILE_BYTES = 350_000
@@ -1060,6 +1060,35 @@ def write_if_changed(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def resolve_output_layout(docs_root: Path) -> tuple[Path, Path, Path, Path]:
+    if docs_root.name.lower() == "insights":
+        output_root = docs_root.parent
+        insights_dir = docs_root
+    else:
+        output_root = docs_root
+        insights_dir = docs_root / "insights"
+    return output_root, insights_dir, output_root / "code", output_root / "charts"
+
+
+def cleanup_nested_output_artifacts(slug: str, insights_dir: Path, diagram_keys: Sequence[str]) -> None:
+    nested_code_dir = insights_dir / "code"
+    nested_charts_dir = insights_dir / "charts"
+    expected_keys = {*LEGACY_ARCHITECTURE_KEYS, *diagram_keys}
+
+    for diagram_key in expected_keys:
+        nested_code = nested_code_dir / f"{slug}-{diagram_key}.puml"
+        nested_chart = nested_charts_dir / f"{slug}-{diagram_key}.svg"
+        if nested_code.exists():
+            nested_code.unlink()
+        if nested_chart.exists():
+            nested_chart.unlink()
+
+    if nested_code_dir.exists() and not any(nested_code_dir.iterdir()):
+        nested_code_dir.rmdir()
+    if nested_charts_dir.exists() and not any(nested_charts_dir.iterdir()):
+        nested_charts_dir.rmdir()
+
+
 def build_markdown(result: AnalysisResult, slug: str) -> str:
     reasons = result.strong_signals or result.medium_signals or ["用户显式指定"]
     highlights = "；".join(reasons[:3])
@@ -1070,7 +1099,7 @@ def build_markdown(result: AnalysisResult, slug: str) -> str:
             "",
             chart_intro(diagram_key),
             "",
-            f"![{chart_title(diagram_key)}](./charts/{slug}-{diagram_key}.svg)",
+            f"![{chart_title(diagram_key)}](../charts/{slug}-{diagram_key}.svg)",
             "",
             chart_outro(diagram_key),
             "",
@@ -1323,9 +1352,9 @@ def generate_docs(
         print("没有可生成文档的热点文件。")
         return 1
 
-    code_dir = docs_root / "code"
-    charts_dir = docs_root / "charts"
-    docs_root.mkdir(parents=True, exist_ok=True)
+    output_root, insights_dir, code_dir, charts_dir = resolve_output_layout(docs_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    insights_dir.mkdir(parents=True, exist_ok=True)
     code_dir.mkdir(parents=True, exist_ok=True)
     charts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1339,15 +1368,16 @@ def generate_docs(
     for result in selected:
         slug = slug_for_path(result.metrics.relative_path)
         cleanup_legacy_architecture_artifacts(slug, code_dir, charts_dir)
-        write_if_changed(docs_root / f"{slug}.md", build_markdown(result, slug))
+        cleanup_nested_output_artifacts(slug, insights_dir, result.recommended_diagrams)
+        write_if_changed(insights_dir / f"{slug}.md", build_markdown(result, slug))
         for diagram_key in result.recommended_diagrams:
             plantuml_path = code_dir / f"{slug}-{diagram_key}.puml"
             write_if_changed(plantuml_path, build_plantuml(result, diagram_key, theme=theme))
             if render and runtime is not None:
                 runtime.render(plantuml_path, charts_dir)
 
-    write_if_changed(docs_root / "index.md", build_index(selected))
-    print(f"已在 {docs_root} 下生成 {len(selected)} 个热点文件的洞察文档。")
+    write_if_changed(insights_dir / "index.md", build_index(selected))
+    print(f"已在 {output_root} 下生成 {len(selected)} 个热点文件的洞察文档。")
     return 0
 
 
@@ -1371,7 +1401,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     generate.add_argument(
         "--docs-root",
         default=str(DEFAULT_DOCS_ROOT),
-        help="Documentation root relative to repo root. Default: docs/workflow-viz/insights",
+        help="Workflow Viz output root relative to repo root. Default: docs/workflow-viz",
     )
     generate.add_argument(
         "--theme",

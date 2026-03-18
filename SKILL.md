@@ -137,8 +137,8 @@ python scripts/workflow_viz.py generate --repo-root <repo> --theme none --render
 
 - `docs/workflow-viz/insights/index.md`
 - `docs/workflow-viz/insights/<slug>.md`
-- `docs/workflow-viz/insights/code/<slug>-<diagram>.puml`
-- `docs/workflow-viz/insights/charts/<slug>-<diagram>.svg`
+- `docs/workflow-viz/code/<slug>-<diagram>.puml`
+- `docs/workflow-viz/charts/<slug>-<diagram>.svg`
 
 默认图组顺序：
 

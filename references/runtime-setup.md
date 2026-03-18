@@ -6,7 +6,13 @@ v1 不内置 PlantUML jar，也不依赖仓库外的手工长命令。
 
 统一通过 `scripts/workflow_viz.py doctor` 预检运行时，再由脚本负责渲染。
 
-默认生成产物位于 `docs/workflow-viz/insights`，并默认向每个 `.puml` 注入：
+默认生成产物位于：
+
+- `docs/workflow-viz/insights` 中的 Markdown
+- `docs/workflow-viz/code` 中的 PlantUML 源码
+- `docs/workflow-viz/charts` 中的渲染图
+
+并默认向每个 `.puml` 注入：
 
 ```puml
 @startuml

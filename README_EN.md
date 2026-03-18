@@ -45,6 +45,8 @@ Default output location:
 
 ```text
 docs/workflow-viz/insights/
+docs/workflow-viz/code/
+docs/workflow-viz/charts/
 ```
 
 ## What makes it different
@@ -158,7 +160,7 @@ python scripts/workflow_viz.py generate --repo-root <repo> --theme none --render
 ## What the current version already includes
 
 - `doctor / scan / generate` core commands
-- default output under `docs/workflow-viz/insights`
+- default output under `docs/workflow-viz/{insights,code,charts}`
 - PlantUML runtime preflight checks
 - multi-language static hotspot detection
 - architecture-first default diagram packs

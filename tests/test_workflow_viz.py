@@ -58,8 +58,8 @@ def make_result():
 
 
 class WorkflowVizTests(unittest.TestCase):
-    def test_default_docs_root_moves_to_insights_directory(self):
-        self.assertEqual(workflow_viz.DEFAULT_DOCS_ROOT, Path("docs/workflow-viz/insights"))
+    def test_default_docs_root_moves_to_workflow_viz_directory(self):
+        self.assertEqual(workflow_viz.DEFAULT_DOCS_ROOT, Path("docs/workflow-viz"))
 
     def test_recommended_diagrams_prioritize_architecture_pack(self):
         result = make_result()
@@ -115,16 +115,18 @@ class WorkflowVizTests(unittest.TestCase):
         self.assertIn("### 依赖职责图", markdown)
         self.assertIn("图前说明", markdown)
         self.assertIn("图后解读", markdown)
+        self.assertIn(f"../charts/{slug}-architecture-context.svg", markdown)
         self.assertNotIn("## 职责说明", markdown)
         self.assertNotIn("## 复杂度证据", markdown)
         self.assertNotIn("## 关键结论", markdown)
 
-    def test_generate_docs_removes_legacy_architecture_outputs(self):
+    def test_generate_docs_writes_markdown_and_assets_to_separate_directories(self):
         result = make_result()
         slug = workflow_viz.slug_for_path(result.metrics.relative_path)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             docs_root = Path(temp_dir) / "docs" / "workflow-viz"
+            insights_dir = docs_root / "insights"
             code_dir = docs_root / "code"
             charts_dir = docs_root / "charts"
             code_dir.mkdir(parents=True, exist_ok=True)
@@ -146,12 +148,18 @@ class WorkflowVizTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertFalse(legacy_code.exists())
             self.assertFalse(legacy_chart.exists())
+            self.assertTrue((insights_dir / f"{slug}.md").exists())
+            self.assertTrue((insights_dir / "index.md").exists())
             self.assertTrue((code_dir / f"{slug}-architecture-context.puml").exists())
             self.assertTrue((code_dir / f"{slug}-architecture-modules.puml").exists())
             self.assertTrue((code_dir / f"{slug}-architecture-dependencies.puml").exists())
+            self.assertFalse((insights_dir / "code").exists())
+            self.assertFalse((insights_dir / "charts").exists())
 
     def test_documentation_files_describe_new_defaults(self):
         skill = (REPO_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        readme_en = (REPO_ROOT / "README_EN.md").read_text(encoding="utf-8")
         template = (REPO_ROOT / "references" / "markdown-template.md").read_text(encoding="utf-8")
         selection = (REPO_ROOT / "references" / "diagram-selection.md").read_text(encoding="utf-8")
         runtime = (REPO_ROOT / "references" / "runtime-setup.md").read_text(encoding="utf-8")
@@ -160,13 +168,25 @@ class WorkflowVizTests(unittest.TestCase):
         self.assertIn("architecture-context", skill)
         self.assertIn("architecture-modules", skill)
         self.assertIn("architecture-dependencies", skill)
+        self.assertIn("docs/workflow-viz/code", skill)
+        self.assertIn("docs/workflow-viz/charts", skill)
+        self.assertIn("docs/workflow-viz/insights", skill)
+        self.assertIn("docs/workflow-viz/code", readme)
+        self.assertIn("docs/workflow-viz/charts", readme)
+        self.assertIn("docs/workflow-viz/insights", readme)
+        self.assertIn("docs/workflow-viz/code", readme_en)
+        self.assertIn("docs/workflow-viz/charts", readme_en)
+        self.assertIn("docs/workflow-viz/insights", readme_en)
         self.assertIn("图前说明", template)
         self.assertIn("图后解读", template)
+        self.assertIn("../charts/<slug>-architecture-context.svg", template)
         self.assertNotIn("先给结论，再给图", template)
         self.assertIn("架构总览图", selection)
         self.assertIn("模块拆解图", selection)
         self.assertIn("依赖职责图", selection)
         self.assertIn("!theme materia", runtime)
+        self.assertIn("docs/workflow-viz/code", runtime)
+        self.assertIn("docs/workflow-viz/charts", runtime)
         self.assertIn("docs/workflow-viz/insights", runtime)
 
 
