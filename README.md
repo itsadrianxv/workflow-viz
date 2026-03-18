@@ -51,67 +51,15 @@ docs/workflow-viz/charts/
 
 ## 在 Claude Code 中使用
 
-这个仓库已经带了 Claude Code plugin 和 hook：
-
-- plugin 清单在 `.claude-plugin/plugin.json`
-- marketplace 清单在 `.claude-plugin/marketplace.json`
-- hook 配置在 `hooks/hooks.json`
-- Windows 入口脚本在 `hooks/run-hook.cmd`
-
-最推荐的用法，是把仓库当作本地 marketplace 安装：
-
-```text
-/plugin marketplace add <workflow-viz 仓库根目录>
-/plugin install workflow-viz@hungyuk/workflow-viz-dev
-```
-
-如果你只是想本地调试或临时试用，也可以直接在仓库根目录启动：
-
-```bash
-claude --plugin-dir .
-```
-
-安装后建议补两项运行条件：
-
-- Claude Code 版本至少为 `1.0.33`
-- 在 Claude 的运行环境里可以找到 `bash` 和 `python3`
-
-当前 hook 会在 `Write` / `Edit` 后通过 `hooks/run-hook.cmd` 调用 `hooks/post-tool-complexity-check`。它只分析刚修改的代码文件；当理解成本评分达到 60 分以上时，会向 Claude 注入额外上下文，提醒它考虑使用 `workflow-viz`。它不会自动改源码，也不会未经确认就直接生成文档。
-
-插件更新后，运行 `/reload-plugins` 或直接重启 Claude Code。
-
-在 Claude Code 里可以直接这样提：
-
-- “用 workflow-viz 扫描这个仓库里最值得可视化的热点文件。”
-- “对 `src/foo.py` 运行 workflow-viz，并把结果生成到 `docs/workflow-viz`。”
-- “先 scan，再决定要不要 generate。”
-
-想进一步自定义 plugin / hook 配置，可以参考 Claude Code 官方文档：
-
-- [Plugins](https://docs.claude.com/en/docs/claude-code/plugins)
-- [Hooks](https://docs.claude.com/en/docs/claude-code/hooks)
+- 把仓库当作本地 marketplace 安装：先执行 `/plugin marketplace add <workflow-viz 仓库根目录>`，再执行 `/plugin install workflow-viz@hungyuk/workflow-viz-dev`。
+- 本项目已内置 `PostToolUse` hook；当 Claude 执行 `Write` 或 `Edit` 时，会通过 `hooks/run-hook.cmd` 触发 `hooks/post-tool-complexity-check`。
+- 若想主动触发，可以直接说：“请用 workflow-viz 扫描这个仓库里最值得可视化的热点文件。”
 
 ## 在 Codex 中使用
 
-这个项目本质上也是一个 Codex skill。最简单的接入方式，是把整个仓库放到 Codex 的 skill 目录里，并保留 `SKILL.md`、`references/`、`scripts/` 的相对路径关系。
-
-Windows 上常见位置是：
-
-```powershell
-$target = "$env:USERPROFILE\\.codex\\skills\\workflow-viz"
-```
-
-把仓库放好后重启 Codex。之后只要在对话里明确提到 `workflow-viz`，或者直接描述“扫描热点”“生成架构优先文档”这类任务，Codex 就能按 `SKILL.md` 中的规则调用这个项目。
-
-如果你的 Codex 版本使用 `~/.agents/skills` 做发现目录，也可以把当前仓库做一个软链接或目录联接到 `~/.agents/skills/workflow-viz`。
-
-在 Codex 里常见的用法是：
-
-- “扫描这个仓库里理解成本最高的文件。”
-- “为这个 orchestrator / workflow 文件生成 architecture-first 的可视化文档。”
-- “先用 workflow-viz 判断值不值得画，再决定是否生成。”
-
-需要注意的是：Codex 主要使用这个仓库里的 `SKILL.md` 和 Python 脚本，不会自动读取 `.claude-plugin` 下面的 Claude Code hook。换句话说，Claude 的 `PostToolUse` 提示增强是 Claude 专用能力，Codex 侧默认还是走显式 skill 调用。
+- 全局安装：`git clone https://github.com/itsadrianxv/workflow-viz.git "$env:USERPROFILE\\.codex\\skills\\workflow-viz"`。
+- 项目级安装：在项目根目录执行 `git clone https://github.com/itsadrianxv/workflow-viz.git .codex/skills/workflow-viz`。
+- 若想主动触发，可以直接说：“请用 workflow-viz 判断这个仓库里哪些文件值得可视化，并先 scan 再决定是否 generate。”
 
 ## 最小命令流
 
